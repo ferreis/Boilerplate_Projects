@@ -42,12 +42,12 @@ services:
   backend:
     build:
       context: .
-      dockerfile: docker/backend/${BACKEND_TYPE:-python}/Dockerfile
+      dockerfile: docker/backend/__SELECT_BACKEND__/Dockerfile
       target: development
     volumes:
-      - ./backend/${BACKEND_TYPE:-python}:/app
+      - ./backend/__SELECT_BACKEND__:/app
     env_file:
-      - ./env/backend.${BACKEND_TYPE:-python}.dev.env
+      - ./env/backend.__SELECT_BACKEND__.dev.env
     environment:
       DEPLOY_ENV: development
       BASE_URL: /{nome_projeto}/api

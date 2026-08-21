@@ -92,6 +92,13 @@ class AuthenticationRoutesIntegrationTestCase(unittest.TestCase):
         access_token = login_response.json()["access_token"]
         self.assertTrue(access_token)
         self.assertIn("auth_refresh_token", self.client.cookies)
+        self.assertEqual("no-store", login_response.headers["cache-control"])
+        self.assertEqual("no-cache", login_response.headers["pragma"])
+        set_cookie = login_response.headers["set-cookie"]
+        self.assertIn("HttpOnly", set_cookie)
+        self.assertIn("SameSite=lax", set_cookie)
+        self.assertIn("Path=/api/auth/refresh", set_cookie)
+        self.assertIn("Max-Age=172800", set_cookie)
 
         context_response = self.client.get(
             "/auth/context",
@@ -133,6 +140,13 @@ class AuthenticationRoutesIntegrationTestCase(unittest.TestCase):
         )
         self.assertEqual(401, response.status_code)
         self.assertEqual({"detail": "Access token inválido."}, response.json())
+
+    def test_login_schema_preserves_password_limit(self) -> None:
+        response = self.client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "x" * 73},
+        )
+        self.assertEqual(422, response.status_code)
 
     def test_invalid_login_is_rejected(self) -> None:
         response = self.client.post(

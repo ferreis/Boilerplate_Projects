@@ -9,13 +9,14 @@ from authentication.domain.exceptions import (
 )
 from authentication.presentation.dependencies import get_current_user
 from authentication.presentation.schemas.auth_schemas import LoginRequest
-from shared.infrastructure.config.settings import ApplicationSettings
 
 
 def create_auth_router(
     login_use_case: LoginUseCase,
     refresh_session_use_case: RefreshSessionUseCase,
-    settings: ApplicationSettings,
+    base_url: str,
+    auth_cookie_secure: bool,
+    refresh_token_expire_days: int,
 ) -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
@@ -30,7 +31,13 @@ def create_auth_router(
         except InvalidCredentialsError as error:
             raise HTTPException(status_code=401, detail="Credenciais inválidas.") from error
 
-        _set_refresh_cookie(response, session.refresh_token, settings)
+        _set_refresh_cookie(
+            response,
+            session.refresh_token,
+            base_url,
+            auth_cookie_secure,
+            refresh_token_expire_days,
+        )
         return {
             "access_token": session.access_token,
             "expires_in": session.access_expires_in_seconds,
@@ -50,7 +57,13 @@ def create_auth_router(
         except InvalidTokenError as error:
             raise HTTPException(status_code=401, detail="Refresh token inválido.") from error
 
-        _set_refresh_cookie(response, session.refresh_token, settings)
+        _set_refresh_cookie(
+            response,
+            session.refresh_token,
+            base_url,
+            auth_cookie_secure,
+            refresh_token_expire_days,
+        )
         return {
             "access_token": session.access_token,
             "expires_in": session.access_expires_in_seconds,
@@ -61,7 +74,7 @@ def create_auth_router(
         _disable_cache(response)
         response.delete_cookie(
             "auth_refresh_token",
-            path=f"{settings.base_url}/auth/refresh",
+            path=f"{base_url}/auth/refresh",
         )
         return {"message": "Sessão encerrada."}
 
@@ -87,14 +100,16 @@ def _disable_cache(response: Response) -> None:
 def _set_refresh_cookie(
     response: Response,
     refresh_token: str,
-    settings: ApplicationSettings,
+    base_url: str,
+    auth_cookie_secure: bool,
+    refresh_token_expire_days: int,
 ) -> None:
     response.set_cookie(
         key="auth_refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=settings.authentication.auth_cookie_secure,
+        secure=auth_cookie_secure,
         samesite="lax",
-        path=f"{settings.base_url}/auth/refresh",
-        max_age=settings.authentication.refresh_token_expire_days * 86400,
+        path=f"{base_url}/auth/refresh",
+        max_age=refresh_token_expire_days * 86400,
     )

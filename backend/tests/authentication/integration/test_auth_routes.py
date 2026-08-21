@@ -70,7 +70,15 @@ class AuthenticationRoutesIntegrationTestCase(unittest.TestCase):
         app = FastAPI()
         app.middleware("http")(create_jwt_middleware(token_service))
         app.include_router(
-            create_auth_router(login_use_case, refresh_use_case, settings)
+            create_auth_router(
+                login_use_case,
+                refresh_use_case,
+                base_url=settings.base_url,
+                auth_cookie_secure=settings.authentication.auth_cookie_secure,
+                refresh_token_expire_days=(
+                    settings.authentication.refresh_token_expire_days
+                ),
+            )
         )
         self.client = TestClient(app)
 

@@ -72,6 +72,10 @@ app.include_router(
     create_auth_router(
         login_use_case=login_use_case,
         refresh_session_use_case=refresh_session_use_case,
-        settings=settings,
+        base_url=settings.base_url,
+        auth_cookie_secure=settings.authentication.auth_cookie_secure,
+        refresh_token_expire_days=(
+            settings.authentication.refresh_token_expire_days
+        ),
     )
 )

@@ -1,5 +1,3 @@
-import os
-
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,61 +5,73 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 load_dotenv()
 
-from middleware import (
-    jwt_middleware,
-    request_size_limit_middleware,
-    security_headers_middleware,
-    validate_security_configuration,
+from authentication.application.use_cases.login import LoginUseCase
+from authentication.application.use_cases.refresh_session import RefreshSessionUseCase
+from authentication.infrastructure.providers.environment_credentials_provider import (
+    EnvironmentCredentialsProvider,
 )
-from authentication import validate_authentication_configuration
-from routes import auth, health
+from authentication.infrastructure.security.bcrypt_password_verifier import (
+    BcryptPasswordVerifier,
+)
+from authentication.infrastructure.security.jwt_token_service import JwtTokenService
+from authentication.presentation.middleware import create_jwt_middleware
+from authentication.presentation.routes.auth_routes import create_auth_router
+from shared.infrastructure.config.settings import load_settings, validate_settings
+from shared.presentation.middleware.security import (
+    create_request_size_limit_middleware,
+    create_security_headers_middleware,
+)
+from system.presentation.routes.health_routes import router as health_router
 
 
-def get_allowed_cors_origins() -> list[str]:
-    configured_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
-    allowed_origins = [
-        origin.strip()
-        for origin in configured_origins.split(",")
-        if origin.strip()
-    ]
+settings = load_settings()
+validate_settings(settings)
 
-    if "*" in allowed_origins:
-        raise RuntimeError(
-            "CORS_ALLOWED_ORIGINS não pode usar '*' quando credenciais estão habilitadas."
-        )
+credentials_provider = EnvironmentCredentialsProvider(settings.authentication)
+password_verifier = BcryptPasswordVerifier()
+token_service = JwtTokenService(settings.authentication)
 
-    return allowed_origins
+login_use_case = LoginUseCase(
+    credentials_provider=credentials_provider,
+    password_verifier=password_verifier,
+    token_service=token_service,
+)
+refresh_session_use_case = RefreshSessionUseCase(
+    credentials_provider=credentials_provider,
+    token_service=token_service,
+)
 
-
-base_url = os.getenv("BASE_URL", "/api")
-validate_security_configuration()
-validate_authentication_configuration()
 app = FastAPI(
-    title=os.getenv("APP_NAME", "Backend Base"),
-    root_path=base_url,
+    title=settings.app_name,
+    root_path=settings.base_url,
 )
 
-allowed_cors_origins = get_allowed_cors_origins()
-if allowed_cors_origins:
+if settings.cors_allowed_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_cors_origins,
+        allow_origins=list(settings.cors_allowed_origins),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
 
-trusted_hosts = [
-    host.strip()
-    for host in os.getenv("TRUSTED_HOSTS", "localhost,127.0.0.1").split(",")
-    if host.strip()
-]
-if trusted_hosts:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
+if settings.trusted_hosts:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(settings.trusted_hosts),
+    )
 
-app.middleware("http")(jwt_middleware)
-app.middleware("http")(request_size_limit_middleware)
-app.middleware("http")(security_headers_middleware)
+app.middleware("http")(create_jwt_middleware(token_service))
+app.middleware("http")(
+    create_request_size_limit_middleware(settings.max_request_body_bytes)
+)
+app.middleware("http")(create_security_headers_middleware(settings.app_env))
 
-app.include_router(health.router)
-app.include_router(auth.router)
+app.include_router(health_router)
+app.include_router(
+    create_auth_router(
+        login_use_case=login_use_case,
+        refresh_session_use_case=refresh_session_use_case,
+        settings=settings,
+    )
+)

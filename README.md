@@ -1,28 +1,149 @@
-# Boilerplate Python + Vue
+# Boilerplate Vue + API multi-backend
 
-Boilerplate para iniciar aplicações web com frontend em Vue, backend em FastAPI, banco de dados PostgreSQL, proxy reverso Nginx e ambiente completamente containerizado com Docker Compose.
+Boilerplate para aplicações web com frontend Vue/Vite, Nginx como único ponto de entrada externo, PostgreSQL e backend intercambiável.
 
-O projeto possui configurações separadas para desenvolvimento e produção, com foco em isolamento dos serviços, organização da infraestrutura e uma base inicial de autenticação.
+O projeto permite escolher entre:
 
-## Tecnologias
+- **Python + FastAPI**;
+- **C++ + Drogon**;
+- **PHP + Symfony**.
 
-- Vue
-- Vite
-- Vue Router
-- FastAPI
-- Uvicorn
-- PostgreSQL 18
-- Nginx
-- Docker
-- Docker Compose
-- JWT
-- bcrypt
+Todos os backends são APIs HTTP e utilizam o mesmo serviço Docker `backend`, a mesma porta interna `8000` e o mesmo proxy do Nginx.
 
-## Arquitetura
+## Selecionando o backend
+
+A seleção é feita por uma única variável na raiz do projeto:
+
+```env
+BACKEND_TYPE=python
+```
+
+Valores aceitos:
+
+```text
+python
+drogon
+symfony
+```
+
+Crie a configuração local:
+
+```bash
+cp .env.example .env
+```
+
+Depois edite `BACKEND_TYPE` ou use o script:
+
+```bash
+./scripts/select-backend.sh python
+./scripts/select-backend.sh drogon
+./scripts/select-backend.sh symfony
+```
+
+Também é possível sobrescrever a opção apenas para um comando:
+
+```bash
+BACKEND_TYPE=drogon docker compose -f docker-compose.dev.yml up --build
+```
+
+## Como a seleção funciona
+
+Os arquivos Compose mantêm um único serviço chamado `backend` e resolvem os arquivos dinamicamente:
+
+```text
+backend/${BACKEND_TYPE}
+docker/backend/${BACKEND_TYPE}/Dockerfile
+env/backend.${BACKEND_TYPE}.dev.env
+env/backend.${BACKEND_TYPE}.env
+```
+
+Exemplo com Symfony:
+
+```text
+backend/symfony
+docker/backend/symfony/Dockerfile
+env/backend.symfony.dev.env
+env/backend.symfony.env
+```
+
+Isso significa que o frontend e o Nginx não precisam saber qual linguagem está executando a API.
+
+## Contrato entre infraestrutura e backend
+
+Toda implementação deve:
+
+- executar uma API HTTP;
+- escutar em `0.0.0.0:8000` por padrão;
+- aceitar `BACKEND_PORT` quando aplicável;
+- permanecer sem portas publicadas diretamente para o host;
+- utilizar o hostname Docker `database` para PostgreSQL quando precisar do banco;
+- disponibilizar `GET /health` retornando `{"status":"ok"}`;
+- manter comandos de inicialização em `docker/backend/<tipo>/entrypoint.sh`.
+
+O contrato completo está em [`backend/CONTRACT.md`](backend/CONTRACT.md).
+
+## Estado das implementações
+
+### Python / FastAPI
+
+É a implementação mais completa atualmente.
+
+Inclui:
+
+- arquitetura modular orientada a domínio;
+- autenticação por usuário e senha;
+- bcrypt;
+- access token JWT;
+- refresh token em cookie HttpOnly;
+- controle de roles;
+- middlewares de segurança;
+- health check;
+- testes de domínio, aplicação e integração.
+
+A documentação arquitetural específica está em:
+
+```text
+backend/python/ARCHITECTURE.md
+```
+
+### C++ / Drogon
+
+Base de API usando Drogon e C++20.
+
+Inclui atualmente:
+
+- projeto CMake;
+- build Docker de desenvolvimento;
+- build multi-stage para produção;
+- API HTTP interna em `8000`;
+- `GET /health`.
+
+Alterações de C++ em desenvolvimento exigem reiniciar o serviço `backend` para recompilar.
+
+### PHP / Symfony
+
+Base de API usando Symfony 7.4 LTS, PHP 8.4 e FrankenPHP.
+
+Inclui atualmente:
+
+- estrutura mínima Symfony;
+- controller HTTP por atributo;
+- FrankenPHP como servidor interno;
+- configuração distinta de desenvolvimento e produção;
+- suporte preparado para `pdo_pgsql`;
+- `GET /health`.
+
+## Paridade de funcionalidades
+
+Os três backends respeitam o contrato operacional e o health check, mas **ainda não possuem paridade completa de funcionalidades**.
+
+Atualmente a autenticação existe somente no backend Python.
+
+Antes de trocar `BACKEND_TYPE` em uma aplicação que já dependa de endpoints específicos, esses endpoints devem ser portados para a implementação escolhida mantendo o mesmo contrato HTTP.
+
+## Arquitetura de rede
 
 ### Desenvolvimento
-
-No ambiente de desenvolvimento, o Nginx funciona como ponto de entrada da aplicação e encaminha as requisições para o servidor Vite ou para o FastAPI.
 
 ```text
 Navegador
@@ -30,22 +151,18 @@ Navegador
     v
 Nginx :80 / :443
     |
-    +-------------------+
-    |                   |
-    v                   v
-Vue / Vite :5173    FastAPI :8000
-                        |
-                        v
-                  PostgreSQL :5432
+    +--------------------------+
+    |                          |
+    v                          v
+Vue / Vite :5173         backend :8000
+                                |
+                                v
+                         PostgreSQL :5432
 ```
 
-O Vite continua disponível somente dentro das redes Docker. As portas `5173`, `8000` e `5432` não são publicadas diretamente no host.
+A porta do frontend, backend e PostgreSQL não é publicada diretamente no host.
 
 ### Produção
-
-Em produção não existe um container Node executando o frontend.
-
-O Vue é compilado durante o build multi-stage da imagem do Nginx. O resultado do `vite build` é copiado para a imagem final e servido diretamente pelo Nginx.
 
 ```text
 Internet
@@ -53,330 +170,204 @@ Internet
    v
 Nginx :80 / :443
    |
-   +----------------------+
-   |                      |
-   v                      v
-Frontend estático     FastAPI :8000
-                          |
-                          v
-                    PostgreSQL :5432
+   +---------------------------+
+   |                           |
+   v                           v
+Frontend estático         backend :8000
+                                |
+                                v
+                         PostgreSQL :5432
 ```
 
-Somente o Nginx publica portas para o host.
+Somente o Nginx expõe portas para o mundo externo.
 
-O backend utiliza `expose`, mas não utiliza `ports`. Portanto, não pode ser acessado diretamente pela rede externa através do Docker Compose.
-
-O PostgreSQL também não publica nenhuma porta e fica em uma rede interna compartilhada somente com o backend.
-
-## Isolamento das redes em produção
-
-O `docker-compose.prd.yml` separa a aplicação em três redes:
+As redes internas mantêm o fluxo:
 
 ```text
-edgeNet
-   |
- Nginx
-   |
-backendNet (internal)
-   |
-Backend
-   |
-databaseNet (internal)
-   |
-PostgreSQL
+Internet -> Nginx -> backend -> PostgreSQL
 ```
 
-### `edgeNet`
+O Nginx não participa da rede do banco e o PostgreSQL não participa da rede do Nginx.
 
-Rede utilizada pelo Nginx como ponto de entrada da aplicação.
+## Rotas públicas
 
-### `backendNet`
+O Nginx publica a aplicação abaixo do marcador `{nome_projeto}`.
 
-Rede interna compartilhada apenas entre:
-
-- Nginx
-- Backend
-
-O banco de dados não participa dessa rede.
-
-### `databaseNet`
-
-Rede interna compartilhada apenas entre:
-
-- Backend
-- PostgreSQL
-
-O Nginx não participa dessa rede e, portanto, não consegue acessar diretamente o banco de dados.
-
-A comunicação entre os serviços fica organizada desta forma:
+Exemplo após configurar o projeto como `meu-sistema`:
 
 ```text
-Internet -> Nginx -> Backend -> PostgreSQL
+https://dominio.com/meu-sistema/
+https://dominio.com/meu-sistema/api/health
 ```
 
-> O frontend Vue é executado no navegador do usuário. Por isso, as chamadas HTTP feitas pelo frontend para a API chegam ao Nginx como qualquer outra requisição HTTP. O isolamento impede acesso direto aos containers do backend e do banco, mas não substitui autenticação e autorização nos endpoints da API.
+O Nginx remove `/meu-sistema/api/` antes de encaminhar a requisição ao backend. Portanto:
 
-## Estrutura do projeto
+```text
+/meu-sistema/api/health -> backend:8000/health
+```
+
+## Estrutura principal
 
 ```text
 .
 ├── backend/
-│   ├── routes/
-│   ├── tests/
-│   ├── authentication.py
-│   ├── core.py
-│   ├── main.py
-│   ├── middleware.py
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
+│   ├── CONTRACT.md
+│   ├── README.md
+│   ├── python/
+│   │   ├── authentication/
+│   │   ├── shared/
+│   │   ├── system/
+│   │   ├── tests/
+│   │   ├── ARCHITECTURE.md
+│   │   ├── main.py
+│   │   └── requirements.txt
+│   ├── drogon/
+│   │   ├── src/
+│   │   ├── CMakeLists.txt
+│   │   └── README.md
+│   └── symfony/
+│       ├── config/
+│       ├── public/
+│       ├── src/
+│       ├── composer.json
+│       └── README.md
 │
 ├── docker/
 │   ├── backend/
-│   │   ├── Dockerfile
-│   │   └── entrypoint.sh
-│   │
+│   │   ├── python/
+│   │   ├── drogon/
+│   │   └── symfony/
 │   ├── frontend/
-│   │   ├── Dockerfile
-│   │   └── entrypoint.sh
-│   │
 │   └── nginx/
-│       ├── Dockerfile
-│       ├── entrypoint.sh
-│       ├── nginx.dev.conf
-│       └── nginx.prd.conf
 │
 ├── env/
-│   ├── backend.dev.env
+│   ├── backend.python.dev.env
+│   ├── backend.drogon.dev.env
+│   ├── backend.symfony.dev.env
 │   ├── database.dev.env
 │   └── frontend.dev.env
 │
 ├── scripts/
 │   ├── create-production-envs.sh
-│   └── replace-project-name.sh
+│   ├── replace-project-name.sh
+│   └── select-backend.sh
 │
+├── .env.example
 ├── docker-compose.dev.yml
 └── docker-compose.prd.yml
 ```
 
-## Dockerfiles
+## Configurando um novo projeto
 
-Os Dockerfiles utilizam a raiz do repositório como contexto de build.
-
-Exemplo:
-
-```yaml
-build:
-  context: .
-  dockerfile: docker/backend/Dockerfile
-```
-
-Isso permite que um Dockerfile armazenado dentro de `docker/` copie arquivos da aplicação, como:
-
-```dockerfile
-COPY backend/requirements.txt ./requirements.txt
-COPY backend/ .
-```
-
-O mesmo padrão é utilizado no frontend e no build do Nginx.
-
-## Entrypoints
-
-Os comandos responsáveis por iniciar os serviços não ficam definidos no Docker Compose.
-
-Cada serviço possui seu próprio `entrypoint.sh` dentro da pasta `docker/` correspondente.
-
-### Backend
-
-```text
-docker/backend/entrypoint.sh
-```
-
-Em desenvolvimento inicia o Uvicorn com reload.
-
-Em produção inicia o Uvicorn sem reload e permite configurar a quantidade de workers através de:
-
-```env
-UVICORN_WORKERS=2
-```
-
-### Frontend
-
-```text
-docker/frontend/entrypoint.sh
-```
-
-É utilizado pelo container de desenvolvimento para iniciar o Vite.
-
-### Nginx
-
-```text
-docker/nginx/entrypoint.sh
-```
-
-No ambiente de desenvolvimento pode gerar automaticamente um certificado TLS autoassinado.
-
-Em produção os certificados precisam existir previamente.
-
-## Nome do projeto
-
-Os arquivos de infraestrutura utilizam o marcador:
-
-```text
-{nome_projeto}
-```
-
-Para substituir esse marcador pelo nome real da aplicação, utilize:
+### 1. Configure o nome
 
 ```bash
 ./scripts/replace-project-name.sh meu-projeto
 ```
 
-O nome deve:
+O nome deve começar com letra minúscula e pode conter letras minúsculas, números e hífens.
 
-- começar com uma letra minúscula;
-- conter apenas letras minúsculas, números e hífens.
-
-Exemplo:
+### 2. Escolha o backend
 
 ```bash
-./scripts/replace-project-name.sh sistema-exemplo
+./scripts/select-backend.sh python
 ```
 
-O comando atualiza os arquivos Docker Compose e as configurações do Nginx.
-
-Essa substituição deve normalmente ser realizada uma única vez ao criar um novo projeto a partir deste boilerplate.
-
-## Base path
-
-A aplicação é preparada para funcionar abaixo de um prefixo de URL.
-
-Exemplo para um projeto chamado `sistema-exemplo`:
-
-```text
-https://dominio.com/sistema-exemplo/
-```
-
-A API fica disponível através de:
-
-```text
-https://dominio.com/sistema-exemplo/api/
-```
-
-O Vite recebe o prefixo através de:
-
-```env
-VITE_BASE_PATH=/sistema-exemplo/
-```
-
-Isso faz com que os assets gerados no build utilizem o caminho correto.
-
-## Ambiente de desenvolvimento
-
-### 1. Configure o nome do projeto
+ou:
 
 ```bash
-./scripts/replace-project-name.sh meu-projeto
+./scripts/select-backend.sh drogon
 ```
 
-### 2. Configure as variáveis de ambiente
+ou:
 
-Revise principalmente:
+```bash
+./scripts/select-backend.sh symfony
+```
+
+### 3. Configure o ambiente de desenvolvimento
+
+Edite o arquivo correspondente ao backend escolhido:
 
 ```text
-env/backend.dev.env
+env/backend.python.dev.env
+env/backend.drogon.dev.env
+env/backend.symfony.dev.env
+```
+
+Também revise:
+
+```text
 env/database.dev.env
 env/frontend.dev.env
 ```
 
-O backend exige uma chave JWT com pelo menos 32 caracteres:
-
-```env
-JWT_SECRET=
-```
-
-Também é necessário configurar um hash bcrypt para o usuário inicial:
-
-```env
-AUTH_PASSWORD_HASH=
-```
-
-Um hash pode ser gerado com:
-
-```bash
-python -c "import bcrypt; print(bcrypt.hashpw(b'sua-senha', bcrypt.gensalt()).decode())"
-```
-
-### 3. Suba os containers
+### 4. Suba o ambiente
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Para executar em segundo plano:
+Em segundo plano:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-### 4. Encerrar o ambiente
+### 5. Encerre
 
 ```bash
 docker compose -f docker-compose.dev.yml down
 ```
 
-## Ambiente de produção
+## Produção
 
-### 1. Gere os arquivos de ambiente de produção
-
-O script abaixo cria os arquivos de produção a partir dos arquivos `*.dev.env`, mantendo comentários e removendo os valores existentes:
+### 1. Gere os arquivos de produção
 
 ```bash
 ./scripts/create-production-envs.sh
 ```
 
-Serão criados arquivos como:
+O script gera, entre outros:
 
 ```text
-env/backend.env
+env/backend.python.env
+env/backend.drogon.env
+env/backend.symfony.env
 env/database.env
 env/frontend.env
 ```
 
-Esses arquivos não devem ser versionados com credenciais reais.
+Os valores são removidos dos modelos para evitar reaproveitar segredos de desenvolvimento.
 
-### 2. Configure as variáveis de produção
+### 2. Preencha o ambiente selecionado
 
-Preencha os arquivos gerados com valores seguros.
+Se estiver usando Python:
 
-Em produção, utilize obrigatoriamente:
-
-```env
-APP_ENV=production
-AUTH_COOKIE_SECURE=true
+```text
+env/backend.python.env
 ```
 
-Também configure:
+Se estiver usando Drogon:
 
-- `JWT_SECRET` com um segredo longo e aleatório;
-- `AUTH_PASSWORD_HASH` com um hash bcrypt válido;
-- usuário e senha fortes para o PostgreSQL;
-- hosts e origens permitidas de acordo com o domínio real.
+```text
+env/backend.drogon.env
+```
+
+Se estiver usando Symfony:
+
+```text
+env/backend.symfony.env
+```
 
 ### 3. Configure TLS
 
-Os certificados devem existir em:
+Os certificados de produção devem existir em:
 
 ```text
 docker/nginx/ssl/nginx.crt
 docker/nginx/ssl/nginx.key
 ```
-
-O Nginx não gera certificado autoassinado quando `NGINX_ENV=production`.
 
 ### 4. Suba a aplicação
 
@@ -384,157 +375,86 @@ O Nginx não gera certificado autoassinado quando `NGINX_ENV=production`.
 docker compose -f docker-compose.prd.yml up -d --build
 ```
 
-### 5. Encerrar a aplicação
+## Dockerfiles de backend
 
-```bash
-docker compose -f docker-compose.prd.yml down
+Os três Dockerfiles possuem targets padronizados:
+
+```text
+development
+production
 ```
 
-## Persistência do PostgreSQL
+O Compose de desenvolvimento sempre utiliza `development`; o Compose de produção sempre utiliza `production`.
 
-O projeto utiliza PostgreSQL 18.
+Nenhum `command` de runtime é definido no Compose. A inicialização pertence aos respectivos `entrypoint.sh`.
 
-O volume é montado em:
+## PostgreSQL
+
+O banco utiliza PostgreSQL 18 e persiste dados no volume Docker montado em:
 
 ```text
 /var/lib/postgresql
 ```
 
-Os dados são persistidos em volumes Docker separados para desenvolvimento e produção:
+O banco não publica `5432` para o host.
+
+Quando um backend implementar persistência, deve conectar internamente usando o serviço:
 
 ```text
-database_dev_data
-database_prd_data
+database:5432
 ```
-
-Isso evita compartilhar acidentalmente o banco de desenvolvimento com o ambiente de produção.
-
-## Nginx
-
-Existem duas configurações distintas:
-
-```text
-docker/nginx/nginx.dev.conf
-docker/nginx/nginx.prd.conf
-```
-
-### Desenvolvimento
-
-O Nginx encaminha:
-
-```text
-/{nome_projeto}/        -> frontend:5173
-/{nome_projeto}/api/    -> backend:8000
-```
-
-O proxy do Vite mantém suporte a WebSocket, necessário para HMR.
-
-### Produção
-
-O Nginx serve diretamente os arquivos compilados do Vue e encaminha apenas o caminho da API para o backend.
-
-Outros caminhos fora do prefixo da aplicação retornam `404`.
-
-## Backend
-
-O backend utiliza FastAPI e possui uma base inicial para:
-
-- autenticação com usuário e senha;
-- hash de senha com bcrypt;
-- access token JWT;
-- refresh token JWT em cookie `HttpOnly`;
-- middleware de autenticação;
-- controle de roles;
-- limite de tamanho das requisições;
-- CORS configurável;
-- validação de hosts confiáveis;
-- headers básicos de segurança.
-
-O Redis não faz parte deste boilerplate.
 
 ## Frontend
 
-O frontend utiliza Vue com Vite e Vue Router.
+O frontend utiliza Vue, Vite e Vue Router.
 
-O `vite.config.js` utiliza `VITE_BASE_PATH` para permitir que a aplicação seja publicada abaixo do prefixo definido para o projeto.
+Em desenvolvimento, o Vite roda em um container interno.
 
-No desenvolvimento, o Vite é executado dentro de seu próprio container.
+Em produção, o frontend é compilado durante o build do Nginx e servido como arquivos estáticos. Não existe servidor Node de frontend em produção.
 
-Na produção, o Vite é utilizado apenas durante o processo de build e não permanece executando.
+## Nginx
+
+O Nginx é independente do backend escolhido.
+
+Ele sempre encaminha a API para:
+
+```text
+backend:8000
+```
+
+Por isso, adicionar uma nova linguagem de backend não deve exigir mudanças no Nginx se o contrato definido em `backend/CONTRACT.md` for respeitado.
+
+## Adicionando outro backend
+
+Para adicionar uma quarta implementação, por exemplo `go`:
+
+```text
+backend/go/
+docker/backend/go/Dockerfile
+docker/backend/go/entrypoint.sh
+env/backend.go.dev.env
+```
+
+O Dockerfile precisa possuir os targets:
+
+```text
+development
+production
+```
+
+Depois adicione o novo identificador à validação de `scripts/select-backend.sh`.
+
+Não é necessário duplicar Docker Compose nem alterar o Nginx.
 
 ## Segurança
 
-A infraestrutura de produção segue algumas regras básicas:
+Em produção:
 
-- somente Nginx publica portas para o host;
-- backend não publica a porta `8000`;
-- PostgreSQL não publica a porta `5432`;
-- redes do backend e banco são marcadas como internas;
-- Nginx não participa da rede do PostgreSQL;
-- PostgreSQL não participa da rede do Nginx;
-- containers compatíveis utilizam `no-new-privileges:true`;
-- TLS é obrigatório no ponto de entrada de produção;
-- arquivos `.env` de produção não devem ser versionados;
-- arquivos ocultos são bloqueados pelo Nginx;
-- a versão do Nginx não é exibida nas respostas de produção.
-
-O isolamento de rede não substitui controles de segurança da aplicação. Endpoints do backend continuam precisando aplicar autenticação, autorização, validação de entrada e demais controles necessários.
-
-## Comandos úteis
-
-### Desenvolvimento
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-```bash
-docker compose -f docker-compose.dev.yml down
-```
-
-### Produção
-
-```bash
-docker compose -f docker-compose.prd.yml up -d --build
-```
-
-```bash
-docker compose -f docker-compose.prd.yml down
-```
-
-### Logs
-
-```bash
-docker compose -f docker-compose.dev.yml logs -f
-```
-
-```bash
-docker compose -f docker-compose.prd.yml logs -f
-```
-
-### Reconstruir um serviço
-
-```bash
-docker compose -f docker-compose.dev.yml build backend
-```
-
-```bash
-docker compose -f docker-compose.dev.yml build frontend
-```
-
-```bash
-docker compose -f docker-compose.prd.yml build nginx
-```
-
-## Fluxo recomendado para novos projetos
-
-```text
-1. Clonar ou utilizar este repositório como template
-2. Executar replace-project-name.sh
-3. Configurar os arquivos de ambiente
-4. Subir docker-compose.dev.yml
-5. Desenvolver a aplicação
-6. Gerar os arquivos de ambiente de produção
-7. Configurar certificados TLS e segredos
-8. Subir docker-compose.prd.yml
-```
+- apenas Nginx publica `80/443`;
+- backend não publica `8000`;
+- PostgreSQL não publica `5432`;
+- `backendNet` e `databaseNet` são redes internas;
+- Nginx não acessa diretamente PostgreSQL;
+- arquivos de ambiente de produção não são versionados;
+- TLS termina no Nginx;
+- autenticação e autorização continuam sendo responsabilidade da implementação escolhida.

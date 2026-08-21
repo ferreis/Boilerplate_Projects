@@ -42,14 +42,16 @@ services:
   backend:
     build:
       context: .
-      dockerfile: docker/backend/Dockerfile
+      dockerfile: docker/backend/${BACKEND_TYPE:-python}/Dockerfile
+      target: development
     volumes:
-      - ./backend:/app
+      - ./backend/${BACKEND_TYPE:-python}:/app
     env_file:
-      - ./env/backend.dev.env
+      - ./env/backend.${BACKEND_TYPE:-python}.dev.env
     environment:
-      APP_ENV: development
+      DEPLOY_ENV: development
       BASE_URL: /{nome_projeto}/api
+      BACKEND_PORT: "8000"
     expose:
       - "8000"
     depends_on:

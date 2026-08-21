@@ -44,10 +44,10 @@ services:
   backend:
     build:
       context: .
-      dockerfile: docker/backend/${BACKEND_TYPE:-python}/Dockerfile
+      dockerfile: docker/backend/__SELECT_BACKEND__/Dockerfile
       target: production
     env_file:
-      - ./env/backend.${BACKEND_TYPE:-python}.env
+      - ./env/backend.__SELECT_BACKEND__.env
     environment:
       DEPLOY_ENV: production
       BASE_URL: /{nome_projeto}/api

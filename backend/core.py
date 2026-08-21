@@ -1,13 +1,4 @@
-import os
-
-import redis
 from fastapi import HTTPException, Request
-
-
-redis_client = redis.from_url(
-    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-    decode_responses=True,
-)
 
 
 def get_current_user(request: Request) -> dict:

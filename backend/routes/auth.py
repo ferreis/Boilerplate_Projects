@@ -6,9 +6,7 @@ from pydantic import BaseModel, Field
 from authentication import (
     authenticate_user,
     consume_refresh_token,
-    enforce_login_rate_limit,
     issue_tokens,
-    revoke_refresh_token,
 )
 from core import get_current_user
 from middleware import (
@@ -45,12 +43,9 @@ def set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 
 @router.post("/login")
-async def login(login_request: LoginRequest, request: Request, response: Response) -> dict:
+async def login(login_request: LoginRequest, response: Response) -> dict:
     disable_cache(response)
-    request_ip = request.client.host if request.client else "unknown"
     normalized_username = login_request.username.strip()
-    enforce_login_rate_limit(f"username:{normalized_username}")
-    enforce_login_rate_limit(f"ip:{request_ip}")
 
     authenticated_user = authenticate_user(normalized_username, login_request.password)
     access_token, refresh_token = issue_tokens(authenticated_user)
@@ -78,9 +73,8 @@ async def refresh_access_token(request: Request, response: Response) -> dict:
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response) -> dict:
+async def logout(response: Response) -> dict:
     disable_cache(response)
-    revoke_refresh_token(request.cookies.get("auth_refresh_token"))
     response.delete_cookie("auth_refresh_token", path=f"{base_url}/auth/refresh")
     return {"message": "Sessão encerrada."}
 

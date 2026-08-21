@@ -2,9 +2,14 @@ FROM node:24-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm install
 
-COPY . .
+COPY frontend/ .
+COPY docker/frontend/entrypoint.sh /entrypoint.sh
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 5173
+
+ENTRYPOINT ["/entrypoint.sh"]

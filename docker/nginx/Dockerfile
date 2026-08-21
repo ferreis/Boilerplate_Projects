@@ -1,11 +1,31 @@
-FROM nginx:alpine
+FROM nginx:alpine AS nginx-base
 
-# Install openssl for certificate generation
 RUN apk add --no-cache openssl
 
-#COPY nginx.conf /etc/nginx/nginx.conf
-COPY entrypoint.sh /entrypoint.sh
+COPY docker/nginx/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+EXPOSE 80 443
+
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["nginx", "-g", "daemon off;"]
+
+FROM nginx-base AS development
+
+FROM node:24-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY frontend/package*.json ./
+RUN npm install
+
+COPY frontend/ .
+
+ARG VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
+
+RUN npm run build
+
+FROM nginx-base AS production
+
+COPY docker/nginx/nginx.prd.conf /etc/nginx/nginx.conf
+COPY --from=frontend-builder /app/dist /opt/frontend-dist

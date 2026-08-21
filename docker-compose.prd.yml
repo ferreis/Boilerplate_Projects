@@ -1,0 +1,76 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+      target: production
+      args:
+        VITE_BASE_PATH: /{nome_projeto}/
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      NGINX_ENV: production
+      PROJECT_NAME: "{nome_projeto}"
+    volumes:
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - edgeNet
+      - backendNet
+
+  database:
+    image: postgres:18-trixie
+    volumes:
+      - database_prd_data:/var/lib/postgresql
+    env_file:
+      - ./env/database.env
+    expose:
+      - "5432"
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - databaseNet
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    env_file:
+      - ./env/backend.env
+    environment:
+      APP_ENV: production
+      BASE_URL: /{nome_projeto}/api
+    expose:
+      - "8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - backendNet
+      - databaseNet
+
+networks:
+  edgeNet:
+    driver: bridge
+  backendNet:
+    driver: bridge
+    internal: true
+  databaseNet:
+    driver: bridge
+    internal: true
+
+volumes:
+  database_prd_data:

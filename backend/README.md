@@ -1,44 +1,50 @@
-# Backends disponíveis
+# Backends disponíveis no template
 
-O projeto suporta múltiplas implementações de backend sem alterar o Nginx ou o frontend.
+Esta pasta existe em formato multi-backend somente antes da inicialização do projeto.
 
-```text
-backend/
-├── CONTRACT.md
-├── python/
-├── drogon/
-└── symfony/
-```
-
-A escolha é feita por `BACKEND_TYPE`.
-
-```env
-BACKEND_TYPE=python
-```
-
-Valores aceitos:
+As opções disponíveis são:
 
 - `python` — FastAPI;
 - `drogon` — C++/Drogon;
 - `symfony` — PHP/Symfony.
 
-Também é possível usar:
+Escolha uma implementação executando na raiz:
 
 ```bash
 ./scripts/select-backend.sh python
+```
+
+```bash
 ./scripts/select-backend.sh drogon
+```
+
+```bash
 ./scripts/select-backend.sh symfony
 ```
 
-O Compose resolve dinamicamente:
+O script não apenas marca uma opção. Ele remove as implementações descartadas e promove a escolhida para a própria pasta `backend/`.
+
+Depois da execução, esta estrutura:
 
 ```text
-backend/${BACKEND_TYPE}
-docker/backend/${BACKEND_TYPE}/Dockerfile
-env/backend.${BACKEND_TYPE}.dev.env
-env/backend.${BACKEND_TYPE}.env
+backend/
+├── CONTRACT.md
+├── README.md
+├── python/
+├── drogon/
+└── symfony/
 ```
 
-Independentemente da implementação, o container continua se chamando `backend` e utiliza a porta interna `8000`.
+é substituída pelo conteúdo do backend escolhido:
 
-Consulte `CONTRACT.md` antes de adicionar um novo backend.
+```text
+backend/
+├── README.md
+└── ... implementação selecionada
+```
+
+O mesmo processo ocorre em `docker/backend/` e nos arquivos `env/backend.*.dev.env`.
+
+Depois da seleção, não existe mais mecanismo de troca de backend no projeto gerado. Para escolher outra implementação, utilize uma nova cópia do boilerplate ou reverta a seleção pelo Git.
+
+Todas as opções do template devem respeitar `CONTRACT.md` antes da seleção.

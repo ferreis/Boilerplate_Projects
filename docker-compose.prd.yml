@@ -44,12 +44,14 @@ services:
   backend:
     build:
       context: .
-      dockerfile: docker/backend/Dockerfile
+      dockerfile: docker/backend/${BACKEND_TYPE:-python}/Dockerfile
+      target: production
     env_file:
-      - ./env/backend.env
+      - ./env/backend.${BACKEND_TYPE:-python}.env
     environment:
-      APP_ENV: production
+      DEPLOY_ENV: production
       BASE_URL: /{nome_projeto}/api
+      BACKEND_PORT: "8000"
     expose:
       - "8000"
     depends_on:

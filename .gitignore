@@ -25,6 +25,18 @@ htmlcov/
 venv/
 ENV/
 
+# C++ / CMake
+backend/*/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# PHP / Symfony
+backend/*/vendor/
+backend/*/var/
+.phpunit.result.cache
+
 # Node.js e Vite
 node_modules/
 dist/

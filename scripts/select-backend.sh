@@ -94,14 +94,14 @@ sed -i \
     "${PROJECT_DIRECTORY}/docker/backend/Dockerfile"
 
 sed -i \
-    -e 's#docker/backend/${BACKEND_TYPE:-python}/Dockerfile#docker/backend/Dockerfile#g' \
-    -e 's#./backend/${BACKEND_TYPE:-python}:/app#./backend:/app#g' \
-    -e 's#./env/backend.${BACKEND_TYPE:-python}.dev.env#./env/backend.dev.env#g' \
+    -e 's#docker/backend/__SELECT_BACKEND__/Dockerfile#docker/backend/Dockerfile#g' \
+    -e 's#./backend/__SELECT_BACKEND__:/app#./backend:/app#g' \
+    -e 's#./env/backend.__SELECT_BACKEND__.dev.env#./env/backend.dev.env#g' \
     "${PROJECT_DIRECTORY}/docker-compose.dev.yml"
 
 sed -i \
-    -e 's#docker/backend/${BACKEND_TYPE:-python}/Dockerfile#docker/backend/Dockerfile#g' \
-    -e 's#./env/backend.${BACKEND_TYPE:-python}.env#./env/backend.env#g' \
+    -e 's#docker/backend/__SELECT_BACKEND__/Dockerfile#docker/backend/Dockerfile#g' \
+    -e 's#./env/backend.__SELECT_BACKEND__.env#./env/backend.env#g' \
     "${PROJECT_DIRECTORY}/docker-compose.prd.yml"
 
 if [ -f "${PROJECT_DIRECTORY}/.env" ]; then
@@ -119,8 +119,6 @@ if [ -f "${PROJECT_DIRECTORY}/.env" ]; then
         rm -f "${PROJECT_DIRECTORY}/.env"
     fi
 fi
-
-rm -f "${PROJECT_DIRECTORY}/.env.example"
 
 sed "s#__BACKEND_DISPLAY__#${BACKEND_DISPLAY}#g" \
     "${TEMPLATE_DIRECTORY}/README.selected.md" > "${PROJECT_DIRECTORY}/README.md"

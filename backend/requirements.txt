@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+redis
+PyJWT
+python-dotenv
+bcrypt

@@ -2,7 +2,11 @@ FROM dunglas/frankenphp:1-php8.4-trixie AS base
 
 WORKDIR /app
 
-RUN install-php-extensions pdo_pgsql opcache
+RUN install-php-extensions \
+    intl \
+    mbstring \
+    pdo_pgsql \
+    opcache
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 COPY docker/backend/symfony/Caddyfile /etc/frankenphp/Caddyfile

@@ -1,86 +1,124 @@
-# Boilerplate Vue + API multi-backend
+# Boilerplate Vue + API
 
-Boilerplate para aplicações web com frontend Vue/Vite, Nginx como único ponto de entrada externo, PostgreSQL e backend intercambiável.
+Boilerplate para aplicações web com frontend Vue/Vite, Nginx como único ponto de entrada externo, PostgreSQL e backend selecionável durante a criação do projeto.
 
-O projeto permite escolher entre:
+O template oferece três implementações iniciais:
 
 - **Python + FastAPI**;
 - **C++ + Drogon**;
 - **PHP + Symfony**.
 
-Todos os backends são APIs HTTP e utilizam o mesmo serviço Docker `backend`, a mesma porta interna `8000` e o mesmo proxy do Nginx.
+A seleção é uma etapa de inicialização do projeto. Depois de escolher uma implementação, as outras são removidas e o projeto passa a possuir apenas um backend.
 
-## Selecionando o backend
+## Selecionar o backend
 
-A seleção é feita por uma única variável na raiz do projeto:
-
-```env
-BACKEND_TYPE=python
-```
-
-Valores aceitos:
-
-```text
-python
-drogon
-symfony
-```
-
-Crie a configuração local:
-
-```bash
-cp .env.example .env
-```
-
-Depois edite `BACKEND_TYPE` ou use o script:
+Execute uma única vez:
 
 ```bash
 ./scripts/select-backend.sh python
+```
+
+ou:
+
+```bash
 ./scripts/select-backend.sh drogon
+```
+
+ou:
+
+```bash
 ./scripts/select-backend.sh symfony
 ```
 
-Também é possível sobrescrever a opção apenas para um comando:
+### O que o script faz
 
-```bash
-BACKEND_TYPE=drogon docker compose -f docker-compose.dev.yml up --build
-```
+A seleção é **definitiva para a cópia atual do projeto**.
 
-## Como a seleção funciona
+O script:
 
-Os arquivos Compose mantêm um único serviço chamado `backend` e resolvem os arquivos dinamicamente:
+1. preserva somente a implementação escolhida;
+2. remove os outros diretórios de backend;
+3. remove os Dockerfiles dos outros backends;
+4. remove os arquivos de ambiente dos outros backends;
+5. promove o backend escolhido de `backend/<tipo>/` para `backend/`;
+6. promove `docker/backend/<tipo>/` para `docker/backend/`;
+7. renomeia `env/backend.<tipo>.dev.env` para `env/backend.dev.env`;
+8. preserva `env/backend.<tipo>.env` como `env/backend.env`, caso já exista;
+9. substitui as referências dinâmicas dos arquivos Docker Compose por caminhos fixos;
+10. normaliza os paths internos do Dockerfile escolhido;
+11. atualiza `README.md` e `AGENTS.md` para a estrutura final;
+12. remove os arquivos usados exclusivamente para a seleção, inclusive o próprio `select-backend.sh`.
+
+Portanto, depois da seleção não existe `BACKEND_TYPE` nem referência às implementações descartadas.
+
+## Estrutura antes da seleção
 
 ```text
-backend/${BACKEND_TYPE}
-docker/backend/${BACKEND_TYPE}/Dockerfile
-env/backend.${BACKEND_TYPE}.dev.env
-env/backend.${BACKEND_TYPE}.env
+backend/
+├── CONTRACT.md
+├── README.md
+├── python/
+├── drogon/
+└── symfony/
+
+docker/backend/
+├── python/
+├── drogon/
+└── symfony/
+
+env/
+├── backend.python.dev.env
+├── backend.drogon.dev.env
+└── backend.symfony.dev.env
 ```
 
-Exemplo com Symfony:
+## Estrutura depois da seleção
+
+Exemplo conceitual, independentemente da linguagem escolhida:
 
 ```text
-backend/symfony
-docker/backend/symfony/Dockerfile
-env/backend.symfony.dev.env
-env/backend.symfony.env
+backend/
+├── README.md
+└── ... código da API selecionada
+
+docker/backend/
+├── Dockerfile
+├── entrypoint.sh
+└── ... arquivos específicos do runtime
+
+env/
+├── backend.dev.env
+├── database.dev.env
+└── frontend.dev.env
 ```
 
-Isso significa que o frontend e o Nginx não precisam saber qual linguagem está executando a API.
+Os arquivos Compose também passam a usar caminhos fixos:
 
-## Contrato entre infraestrutura e backend
+```text
+backend/
+docker/backend/Dockerfile
+env/backend.dev.env
+env/backend.env
+```
 
-Toda implementação deve:
+## Contrato comum das implementações
+
+Antes da seleção, todas as opções devem respeitar `backend/CONTRACT.md`.
+
+O backend escolhido deve:
 
 - executar uma API HTTP;
-- escutar em `0.0.0.0:8000` por padrão;
-- aceitar `BACKEND_PORT` quando aplicável;
-- permanecer sem portas publicadas diretamente para o host;
-- utilizar o hostname Docker `database` para PostgreSQL quando precisar do banco;
+- escutar em `0.0.0.0:8000`;
+- permanecer sem porta publicada diretamente para o host;
+- utilizar o hostname Docker `database` para PostgreSQL;
 - disponibilizar `GET /health` retornando `{"status":"ok"}`;
-- manter comandos de inicialização em `docker/backend/<tipo>/entrypoint.sh`.
+- manter comandos de runtime no respectivo `entrypoint.sh`.
 
-O contrato completo está em [`backend/CONTRACT.md`](backend/CONTRACT.md).
+Por isso o Nginx não precisa saber qual tecnologia implementa a API. Ele sempre encaminha para:
+
+```text
+backend:8000
+```
 
 ## Estado das implementações
 
@@ -95,51 +133,107 @@ Inclui:
 - bcrypt;
 - access token JWT;
 - refresh token em cookie HttpOnly;
-- controle de roles;
+- autorização por roles;
 - middlewares de segurança;
 - health check;
-- testes de domínio, aplicação e integração.
-
-A documentação arquitetural específica está em:
-
-```text
-backend/python/ARCHITECTURE.md
-```
+- testes de domínio, aplicação, infraestrutura e integração.
 
 ### C++ / Drogon
 
 Base de API usando Drogon e C++20.
 
-Inclui atualmente:
+Inclui:
 
-- projeto CMake;
+- CMake;
 - build Docker de desenvolvimento;
 - build multi-stage para produção;
 - API HTTP interna em `8000`;
 - `GET /health`.
 
-Alterações de C++ em desenvolvimento exigem reiniciar o serviço `backend` para recompilar.
-
 ### PHP / Symfony
 
 Base de API usando Symfony 7.4 LTS, PHP 8.4 e FrankenPHP.
 
-Inclui atualmente:
+Inclui:
 
 - estrutura mínima Symfony;
-- controller HTTP por atributo;
 - FrankenPHP como servidor interno;
+- `pdo_pgsql`, `intl`, `mbstring` e `opcache`;
 - configuração distinta de desenvolvimento e produção;
-- suporte preparado para `pdo_pgsql`;
 - `GET /health`.
 
-## Paridade de funcionalidades
+As implementações ainda não possuem paridade completa de funcionalidades. A autenticação existente está implementada no backend Python e deve ser portada caso outro backend precise oferecer o mesmo contrato funcional.
 
-Os três backends respeitam o contrato operacional e o health check, mas **ainda não possuem paridade completa de funcionalidades**.
+## Configurando um novo projeto
 
-Atualmente a autenticação existe somente no backend Python.
+### 1. Escolha o backend
 
-Antes de trocar `BACKEND_TYPE` em uma aplicação que já dependa de endpoints específicos, esses endpoints devem ser portados para a implementação escolhida mantendo o mesmo contrato HTTP.
+Execute `select-backend.sh` antes de começar a desenvolver.
+
+### 2. Configure o nome do projeto
+
+```bash
+./scripts/replace-project-name.sh meu-projeto
+```
+
+O nome deve começar com letra minúscula e pode conter letras minúsculas, números e hífens.
+
+### 3. Configure os ambientes
+
+Depois da seleção, revise:
+
+```text
+env/backend.dev.env
+env/database.dev.env
+env/frontend.dev.env
+```
+
+### 4. Suba o desenvolvimento
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Em segundo plano:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+Para encerrar:
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+## Produção
+
+Gere os arquivos de produção depois da seleção:
+
+```bash
+./scripts/create-production-envs.sh
+```
+
+Os arquivos principais serão:
+
+```text
+env/backend.env
+env/database.env
+env/frontend.env
+```
+
+Configure os certificados TLS em:
+
+```text
+docker/nginx/ssl/nginx.crt
+docker/nginx/ssl/nginx.key
+```
+
+Depois execute:
+
+```bash
+docker compose -f docker-compose.prd.yml up -d --build
+```
 
 ## Arquitetura de rede
 
@@ -160,8 +254,6 @@ Vue / Vite :5173         backend :8000
                          PostgreSQL :5432
 ```
 
-A porta do frontend, backend e PostgreSQL não é publicada diretamente no host.
-
 ### Produção
 
 ```text
@@ -179,272 +271,7 @@ Frontend estático         backend :8000
                          PostgreSQL :5432
 ```
 
-Somente o Nginx expõe portas para o mundo externo.
-
-As redes internas mantêm o fluxo:
-
-```text
-Internet -> Nginx -> backend -> PostgreSQL
-```
-
-O Nginx não participa da rede do banco e o PostgreSQL não participa da rede do Nginx.
-
-## Rotas públicas
-
-O Nginx publica a aplicação abaixo do marcador `{nome_projeto}`.
-
-Exemplo após configurar o projeto como `meu-sistema`:
-
-```text
-https://dominio.com/meu-sistema/
-https://dominio.com/meu-sistema/api/health
-```
-
-O Nginx remove `/meu-sistema/api/` antes de encaminhar a requisição ao backend. Portanto:
-
-```text
-/meu-sistema/api/health -> backend:8000/health
-```
-
-## Estrutura principal
-
-```text
-.
-├── backend/
-│   ├── CONTRACT.md
-│   ├── README.md
-│   ├── python/
-│   │   ├── authentication/
-│   │   ├── shared/
-│   │   ├── system/
-│   │   ├── tests/
-│   │   ├── ARCHITECTURE.md
-│   │   ├── main.py
-│   │   └── requirements.txt
-│   ├── drogon/
-│   │   ├── src/
-│   │   ├── CMakeLists.txt
-│   │   └── README.md
-│   └── symfony/
-│       ├── config/
-│       ├── public/
-│       ├── src/
-│       ├── composer.json
-│       └── README.md
-│
-├── docker/
-│   ├── backend/
-│   │   ├── python/
-│   │   ├── drogon/
-│   │   └── symfony/
-│   ├── frontend/
-│   └── nginx/
-│
-├── env/
-│   ├── backend.python.dev.env
-│   ├── backend.drogon.dev.env
-│   ├── backend.symfony.dev.env
-│   ├── database.dev.env
-│   └── frontend.dev.env
-│
-├── scripts/
-│   ├── create-production-envs.sh
-│   ├── replace-project-name.sh
-│   └── select-backend.sh
-│
-├── .env.example
-├── docker-compose.dev.yml
-└── docker-compose.prd.yml
-```
-
-## Configurando um novo projeto
-
-### 1. Configure o nome
-
-```bash
-./scripts/replace-project-name.sh meu-projeto
-```
-
-O nome deve começar com letra minúscula e pode conter letras minúsculas, números e hífens.
-
-### 2. Escolha o backend
-
-```bash
-./scripts/select-backend.sh python
-```
-
-ou:
-
-```bash
-./scripts/select-backend.sh drogon
-```
-
-ou:
-
-```bash
-./scripts/select-backend.sh symfony
-```
-
-### 3. Configure o ambiente de desenvolvimento
-
-Edite o arquivo correspondente ao backend escolhido:
-
-```text
-env/backend.python.dev.env
-env/backend.drogon.dev.env
-env/backend.symfony.dev.env
-```
-
-Também revise:
-
-```text
-env/database.dev.env
-env/frontend.dev.env
-```
-
-### 4. Suba o ambiente
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-Em segundo plano:
-
-```bash
-docker compose -f docker-compose.dev.yml up -d --build
-```
-
-### 5. Encerre
-
-```bash
-docker compose -f docker-compose.dev.yml down
-```
-
-## Produção
-
-### 1. Gere os arquivos de produção
-
-```bash
-./scripts/create-production-envs.sh
-```
-
-O script gera, entre outros:
-
-```text
-env/backend.python.env
-env/backend.drogon.env
-env/backend.symfony.env
-env/database.env
-env/frontend.env
-```
-
-Os valores são removidos dos modelos para evitar reaproveitar segredos de desenvolvimento.
-
-### 2. Preencha o ambiente selecionado
-
-Se estiver usando Python:
-
-```text
-env/backend.python.env
-```
-
-Se estiver usando Drogon:
-
-```text
-env/backend.drogon.env
-```
-
-Se estiver usando Symfony:
-
-```text
-env/backend.symfony.env
-```
-
-### 3. Configure TLS
-
-Os certificados de produção devem existir em:
-
-```text
-docker/nginx/ssl/nginx.crt
-docker/nginx/ssl/nginx.key
-```
-
-### 4. Suba a aplicação
-
-```bash
-docker compose -f docker-compose.prd.yml up -d --build
-```
-
-## Dockerfiles de backend
-
-Os três Dockerfiles possuem targets padronizados:
-
-```text
-development
-production
-```
-
-O Compose de desenvolvimento sempre utiliza `development`; o Compose de produção sempre utiliza `production`.
-
-Nenhum `command` de runtime é definido no Compose. A inicialização pertence aos respectivos `entrypoint.sh`.
-
-## PostgreSQL
-
-O banco utiliza PostgreSQL 18 e persiste dados no volume Docker montado em:
-
-```text
-/var/lib/postgresql
-```
-
-O banco não publica `5432` para o host.
-
-Quando um backend implementar persistência, deve conectar internamente usando o serviço:
-
-```text
-database:5432
-```
-
-## Frontend
-
-O frontend utiliza Vue, Vite e Vue Router.
-
-Em desenvolvimento, o Vite roda em um container interno.
-
-Em produção, o frontend é compilado durante o build do Nginx e servido como arquivos estáticos. Não existe servidor Node de frontend em produção.
-
-## Nginx
-
-O Nginx é independente do backend escolhido.
-
-Ele sempre encaminha a API para:
-
-```text
-backend:8000
-```
-
-Por isso, adicionar uma nova linguagem de backend não deve exigir mudanças no Nginx se o contrato definido em `backend/CONTRACT.md` for respeitado.
-
-## Adicionando outro backend
-
-Para adicionar uma quarta implementação, por exemplo `go`:
-
-```text
-backend/go/
-docker/backend/go/Dockerfile
-docker/backend/go/entrypoint.sh
-env/backend.go.dev.env
-```
-
-O Dockerfile precisa possuir os targets:
-
-```text
-development
-production
-```
-
-Depois adicione o novo identificador à validação de `scripts/select-backend.sh`.
-
-Não é necessário duplicar Docker Compose nem alterar o Nginx.
+Somente o Nginx expõe portas externas em produção.
 
 ## Segurança
 

@@ -55,5 +55,5 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npm run test:scripts

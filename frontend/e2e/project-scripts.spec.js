@@ -106,6 +106,8 @@ test('renomeia serviços, containers, redes e Nginx de forma idempotente', () =>
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('server backend-2core-app-dev:8000;')
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('server frontend-2core-app-dev:5173;')
     expect(firstPass['docker/nginx/nginx.prd.conf']).toContain('server backend-2core-app-prd:8000 resolve;')
+    expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('absolute_redirect off;')
+    expect(firstPass['docker/nginx/nginx.prd.conf']).toContain('absolute_redirect off;')
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('location = /2core-app/api {')
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('return 308 /2core-app/api/;')
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('location /2core-app/api/ {')
@@ -149,6 +151,7 @@ test('preserva caminhos de sistema do Nginx ao trocar nomes que coincidem com di
       expect(productionNginx).toContain('ssl_certificate /etc/nginx/ssl/nginx.crt;')
       expect(productionNginx).toContain('ssl_certificate_key /etc/nginx/ssl/nginx.key;')
       expect(productionNginx).toContain('https://${host}__HTTPS_PORT_SUFFIX__${request_uri}')
+      expect(productionNginx).toContain('absolute_redirect off;')
       expect(productionNginx).toContain('location = /ebisu/api {')
       expect(productionNginx).toContain('return 308 /ebisu/api/;')
 

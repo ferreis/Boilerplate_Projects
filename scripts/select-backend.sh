@@ -93,16 +93,22 @@ sed -i \
     -e "s#docker/backend/${BACKEND_TYPE}/#docker/backend/#g" \
     "${PROJECT_DIRECTORY}/docker/backend/Dockerfile"
 
-sed -i \
-    -e 's#docker/backend/__SELECT_BACKEND__/Dockerfile#docker/backend/Dockerfile#g' \
-    -e 's#./backend/__SELECT_BACKEND__:/app#./backend:/app#g' \
-    -e 's#./env/backend.__SELECT_BACKEND__.dev.env#./env/backend.dev.env#g' \
-    "${PROJECT_DIRECTORY}/docker-compose.dev.yml"
+remove_backend_placeholder() {
+    compose_file="$1"
 
-sed -i \
-    -e 's#docker/backend/__SELECT_BACKEND__/Dockerfile#docker/backend/Dockerfile#g' \
-    -e 's#./env/backend.__SELECT_BACKEND__.env#./env/backend.env#g' \
-    "${PROJECT_DIRECTORY}/docker-compose.prd.yml"
+    sed -i \
+        -e 's#/__SELECT_BACKEND__/#/#g' \
+        -e 's#\.__SELECT_BACKEND__\.#.#g' \
+        "${compose_file}"
+
+    if grep -Fq '__SELECT_BACKEND__' "${compose_file}"; then
+        echo "Falha ao remover __SELECT_BACKEND__ de ${compose_file}." >&2
+        exit 1
+    fi
+}
+
+remove_backend_placeholder "${PROJECT_DIRECTORY}/docker-compose.dev.yml"
+remove_backend_placeholder "${PROJECT_DIRECTORY}/docker-compose.prd.yml"
 
 if [ -f "${PROJECT_DIRECTORY}/.env" ]; then
     CLEAN_ENV_FILE="${TEMP_DIRECTORY}/root.env"

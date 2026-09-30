@@ -176,7 +176,7 @@ Execute `select-backend.sh` antes de começar a desenvolver.
 ./scripts/replace-project-name.sh meu-projeto
 ```
 
-O nome deve começar com letra minúscula e pode conter letras minúsculas, números e hífens.
+Use apenas letras minúsculas, números e hífens.
 
 ### 3. Configure os ambientes
 
@@ -206,6 +206,32 @@ Para encerrar:
 docker compose -f docker-compose.dev.yml down
 ```
 
+### Acesso local
+
+Depois de configurar o nome do projeto, use esse nome no prefixo público. Para um projeto chamado `meu-projeto`, as URLs padrão são:
+
+```text
+https://localhost/meu-projeto/
+https://localhost/meu-projeto/api/health
+```
+
+O acesso HTTP redireciona para HTTPS preservando o caminho. O certificado de desenvolvimento é autoassinado, portanto o navegador pode solicitar confirmação local.
+
+As portas externas podem ser alteradas sem modificar as portas internas dos containers:
+
+```bash
+NGINX_HTTP_PORT=8080 NGINX_HTTPS_PORT=8443 docker compose -f docker-compose.dev.yml up --build
+```
+
+Nesse caso:
+
+```text
+http://localhost:8080/meu-projeto/ -> https://localhost:8443/meu-projeto/
+https://localhost:8443/meu-projeto/api/health
+```
+
+O redirecionamento `/meu-projeto/api` -> `/meu-projeto/api/` é relativo e preserva host, esquema e porta. O Nginx remove o prefixo público ao encaminhar a API, então `/meu-projeto/api/health` chega ao backend como `/health`.
+
 ## Produção
 
 Gere os arquivos de produção depois da seleção:
@@ -234,6 +260,8 @@ Depois execute:
 ```bash
 docker compose -f docker-compose.prd.yml up -d --build
 ```
+
+Também é possível definir `NGINX_HTTP_PORT` e `NGINX_HTTPS_PORT` ao iniciar o Compose de produção. Apenas as portas do Nginx são publicadas; backend e PostgreSQL continuam internos.
 
 ## Arquitetura de rede
 
@@ -277,7 +305,7 @@ Somente o Nginx expõe portas externas em produção.
 
 Em produção:
 
-- apenas Nginx publica `80/443`;
+- apenas Nginx publica `80/443` por padrão;
 - backend não publica `8000`;
 - PostgreSQL não publica `5432`;
 - `backendNet` e `databaseNet` são redes internas;

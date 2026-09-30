@@ -1,0 +1,133 @@
+# Descrição: valida temporariamente caminhos internos, sintaxe do Nginx, Compose, renomeação do projeto e rotas HTTP/HTTPS.
+name: Validação temporária do Nginx
+run-name: Validação temporária da configuração do Nginx
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  validar-nginx:
+    name: Validar Nginx, Compose, rotas e scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código da branch dev
+        uses: actions/checkout@v4
+
+      - name: Validar sintaxe dos scripts
+        run: |
+          bash -n scripts/replace-project-name.sh
+          bash -n scripts/select-backend.sh
+          sh -n docker/nginx/entrypoint.sh
+
+      - name: Executar testes Playwright dos scripts
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          npm install --legacy-peer-deps --no-audit --no-fund
+          npm run test:scripts
+
+      - name: Preparar cópia temporária do Boilerplate
+        shell: bash
+        run: |
+          set -euo pipefail
+          validation_dir="${RUNNER_TEMP}/boilerplate-validacao"
+          rm -rf "${validation_dir}"
+          cp -a . "${validation_dir}"
+          echo "VALIDATION_DIR=${validation_dir}" >> "${GITHUB_ENV}"
+
+      - name: Validar seleção, renomeação e caminhos internos
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${VALIDATION_DIR}"
+
+          bash scripts/select-backend.sh python
+          bash scripts/replace-project-name.sh etc
+          bash scripts/replace-project-name.sh ebisu
+
+          grep -Fq 'include /etc/nginx/mime.types;' docker/nginx/nginx.dev.conf
+          grep -Fq 'ssl_certificate /etc/nginx/ssl/nginx.crt;' docker/nginx/nginx.dev.conf
+          grep -Fq 'ssl_certificate_key /etc/nginx/ssl/nginx.key;' docker/nginx/nginx.dev.conf
+          grep -Fq 'pid /var/run/nginx.pid;' docker/nginx/nginx.prd.conf
+          grep -Fq 'error_log /var/log/nginx/error.log warn;' docker/nginx/nginx.prd.conf
+          grep -Fq 'access_log /var/log/nginx/access.log main;' docker/nginx/nginx.prd.conf
+          grep -Fq 'root /usr/share/nginx/html;' docker/nginx/nginx.prd.conf
+
+          if grep -Fq '/ebisu/nginx/mime.types' docker/nginx/nginx.dev.conf docker/nginx/nginx.prd.conf; then
+            echo 'Um caminho de sistema do Nginx foi alterado pelo nome do projeto.' >&2
+            exit 1
+          fi
+
+          grep -Fq 'location = /ebisu/api {' docker/nginx/nginx.dev.conf
+          grep -Fq 'return 308 /ebisu/api/;' docker/nginx/nginx.dev.conf
+          grep -Fq 'location /ebisu/api/ {' docker/nginx/nginx.dev.conf
+          grep -Fq 'proxy_pass http://backend_upstream/;' docker/nginx/nginx.dev.conf
+
+          bash scripts/create-production-envs.sh
+          NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml config --quiet
+          NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.prd.yml config --quiet
+
+      - name: Validar sintaxe das configurações Nginx
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${VALIDATION_DIR}"
+
+          mkdir -p docker/nginx/ssl
+          if [ ! -f docker/nginx/ssl/nginx.crt ] || [ ! -f docker/nginx/ssl/nginx.key ]; then
+            openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+              -keyout docker/nginx/ssl/nginx.key \
+              -out docker/nginx/ssl/nginx.crt \
+              -subj '/CN=localhost'
+          fi
+
+          docker run --rm \
+            --add-host backend-ebisu-dev:127.0.0.1 \
+            --add-host frontend-ebisu-dev:127.0.0.1 \
+            -v "${PWD}/docker/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro" \
+            -v "${PWD}/docker/nginx/ssl:/etc/nginx/ssl:ro" \
+            nginx:alpine nginx -t
+
+          docker run --rm \
+            --add-host backend-ebisu-prd:127.0.0.1 \
+            -v "${PWD}/docker/nginx/nginx.prd.conf:/etc/nginx/nginx.conf:ro" \
+            -v "${PWD}/docker/nginx/ssl:/etc/nginx/ssl:ro" \
+            nginx:alpine nginx -t
+
+      - name: Validar frontend, API e redirecionamentos por HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${VALIDATION_DIR}"
+
+          cleanup() {
+            NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml down -v || true
+          }
+          trap cleanup EXIT
+
+          NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml up -d --build
+
+          for attempt in $(seq 1 30); do
+            if curl -kfsS https://127.0.0.1:18443/ebisu/api/health >/tmp/health.json; then
+              break
+            fi
+            sleep 2
+          done
+
+          grep -Fq '"status":"ok"' /tmp/health.json
+          curl -kfsS https://127.0.0.1:18443/ebisu/ >/tmp/frontend.html
+          grep -Fqi '<html' /tmp/frontend.html
+
+          http_location="$(curl -sSI http://127.0.0.1:18080/ebisu/api | tr -d '\r' | awk 'tolower($1) == "location:" {print $2}')"
+          test "${http_location}" = 'https://127.0.0.1:18443/ebisu/api'
+
+          api_location="$(curl -ksSI https://127.0.0.1:18443/ebisu/api | tr -d '\r' | awk 'tolower($1) == "location:" {print $2}')"
+          test "${api_location}" = '/ebisu/api/'
+
+          NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml exec -T nginx-ebisu-dev nginx -t -c /tmp/nginx.conf

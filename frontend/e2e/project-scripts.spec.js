@@ -95,6 +95,8 @@ test('renomeia serviços, containers, redes e Nginx de forma idempotente', () =>
     expect(firstPass['docker-compose.dev.yml']).toContain('- edgeNet-2core-app-dev')
     expect(firstPass['docker-compose.dev.yml']).toContain('BASE_URL: /2core-app/api')
     expect(firstPass['docker-compose.dev.yml']).toContain('VITE_BASE_PATH: /2core-app/')
+    expect(firstPass['docker-compose.dev.yml']).toContain('"${NGINX_HTTP_PORT:-80}:80"')
+    expect(firstPass['docker-compose.dev.yml']).toContain('"${NGINX_HTTPS_PORT:-443}:443"')
 
     expect(firstPass['docker-compose.prd.yml']).toContain('nginx-2core-app-prd:')
     expect(firstPass['docker-compose.prd.yml']).toContain('container_name: backend-2core-app-prd')
@@ -104,6 +106,10 @@ test('renomeia serviços, containers, redes e Nginx de forma idempotente', () =>
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('server backend-2core-app-dev:8000;')
     expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('server frontend-2core-app-dev:5173;')
     expect(firstPass['docker/nginx/nginx.prd.conf']).toContain('server backend-2core-app-prd:8000 resolve;')
+    expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('location = /2core-app/api {')
+    expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('return 308 /2core-app/api/;')
+    expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('location /2core-app/api/ {')
+    expect(firstPass['docker/nginx/nginx.dev.conf']).toContain('proxy_pass http://backend_upstream/;')
 
     for (const content of Object.values(firstPass)) {
       expect(content).not.toContain('ebisu')
@@ -118,6 +124,40 @@ test('renomeia serviços, containers, redes e Nginx de forma idempotente', () =>
     }
   } finally {
     rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('preserva caminhos de sistema do Nginx ao trocar nomes que coincidem com diretórios Unix', () => {
+  for (const protectedName of ['etc', 'var', 'usr']) {
+    const root = createFixture()
+
+    try {
+      runScript(root, 'scripts/replace-project-name.sh', protectedName)
+      runScript(root, 'scripts/replace-project-name.sh', 'ebisu')
+
+      const developmentNginx = read(root, 'docker/nginx/nginx.dev.conf')
+      const productionNginx = read(root, 'docker/nginx/nginx.prd.conf')
+
+      expect(developmentNginx).toContain('include /etc/nginx/mime.types;')
+      expect(developmentNginx).toContain('ssl_certificate /etc/nginx/ssl/nginx.crt;')
+      expect(developmentNginx).toContain('ssl_certificate_key /etc/nginx/ssl/nginx.key;')
+      expect(productionNginx).toContain('pid /var/run/nginx.pid;')
+      expect(productionNginx).toContain('error_log /var/log/nginx/error.log warn;')
+      expect(productionNginx).toContain('access_log /var/log/nginx/access.log main;')
+      expect(productionNginx).toContain('root /usr/share/nginx/html;')
+      expect(productionNginx).toContain('include /etc/nginx/mime.types;')
+      expect(productionNginx).toContain('ssl_certificate /etc/nginx/ssl/nginx.crt;')
+      expect(productionNginx).toContain('ssl_certificate_key /etc/nginx/ssl/nginx.key;')
+      expect(productionNginx).toContain('https://${host}__HTTPS_PORT_SUFFIX__${request_uri}')
+      expect(productionNginx).toContain('location = /ebisu/api {')
+      expect(productionNginx).toContain('return 308 /ebisu/api/;')
+
+      expect(developmentNginx).not.toContain('/ebisu/nginx/mime.types')
+      expect(productionNginx).not.toContain('/ebisu/run/nginx.pid')
+      expect(productionNginx).not.toContain('/ebisu/share/nginx/html')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   }
 })
 

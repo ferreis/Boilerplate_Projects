@@ -98,6 +98,7 @@ remove_backend_placeholder() {
 
     sed -i \
         -e 's#/__SELECT_BACKEND__/#/#g' \
+        -e 's#/__SELECT_BACKEND__:#:#g' \
         -e 's#\.__SELECT_BACKEND__\.#.#g' \
         "${compose_file}"
 

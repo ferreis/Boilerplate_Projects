@@ -84,6 +84,8 @@ Substitua o marcador `{nome_projeto}` antes de iniciar o desenvolvimento:
 ./scripts/replace-project-name.sh meu-projeto
 ```
 
+Use apenas letras minúsculas, números e hífens.
+
 ## Desenvolvimento
 
 Revise os arquivos:
@@ -111,6 +113,32 @@ Para encerrar:
 ```bash
 docker compose -f docker-compose.dev.yml down
 ```
+
+### Acesso local
+
+Para um projeto chamado `meu-projeto`, as URLs padrão são:
+
+```text
+https://localhost/meu-projeto/
+https://localhost/meu-projeto/api/health
+```
+
+O acesso HTTP redireciona para HTTPS preservando o caminho. O certificado de desenvolvimento é autoassinado.
+
+Para usar portas externas diferentes sem alterar as portas internas dos containers:
+
+```bash
+NGINX_HTTP_PORT=8080 NGINX_HTTPS_PORT=8443 docker compose -f docker-compose.dev.yml up --build
+```
+
+Nesse caso:
+
+```text
+http://localhost:8080/meu-projeto/ -> https://localhost:8443/meu-projeto/
+https://localhost:8443/meu-projeto/api/health
+```
+
+O redirecionamento `/meu-projeto/api` -> `/meu-projeto/api/` preserva a porta por ser relativo. A rota `/meu-projeto/api/health` é encaminhada ao backend como `/health`.
 
 ## Produção
 
@@ -141,13 +169,11 @@ Depois execute:
 docker compose -f docker-compose.prd.yml up -d --build
 ```
 
+`NGINX_HTTP_PORT` e `NGINX_HTTPS_PORT` também podem ser definidos no Compose de produção. Apenas as portas do Nginx são publicadas.
+
 ## Nginx
 
-O Nginx continua sendo independente da tecnologia usada pelo backend. Ele encaminha a API para:
-
-```text
-backend:8000
-```
+O Nginx continua sendo independente da tecnologia usada pelo backend. Ele encaminha a API para o serviço backend na porta interna `8000`.
 
 O prefixo público permanece:
 
@@ -163,7 +189,7 @@ Exemplo:
 
 ## Segurança da infraestrutura
 
-- somente Nginx publica `80/443` em produção;
+- somente Nginx publica `80/443` por padrão em produção;
 - backend não publica `8000`;
 - PostgreSQL não publica `5432`;
 - Nginx não participa da rede do banco;

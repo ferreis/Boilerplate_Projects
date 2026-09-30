@@ -1,0 +1,58 @@
+# Descrição: valida temporariamente os scripts de seleção/renomeação, os testes Playwright e a sintaxe dos arquivos Docker Compose.
+name: Validação temporária de scripts
+run-name: Validação temporária dos scripts de projeto
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  validar-scripts:
+    name: Validar scripts, Playwright e Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código da branch dev
+        uses: actions/checkout@v4
+
+      - name: Validar sintaxe dos scripts
+        run: |
+          bash -n scripts/replace-project-name.sh
+          bash -n scripts/select-backend.sh
+
+      - name: Validar seleção, renomeação idempotente e Docker Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          validation_dir="$(mktemp -d)"
+          cp -a . "${validation_dir}/repo"
+          cd "${validation_dir}/repo"
+
+          bash scripts/select-backend.sh python
+          bash scripts/replace-project-name.sh ebisu
+          bash scripts/replace-project-name.sh projeto-2
+
+          before_hash="$(sha256sum docker-compose.dev.yml docker-compose.prd.yml docker/nginx/nginx.dev.conf docker/nginx/nginx.prd.conf | sha256sum)"
+          bash scripts/replace-project-name.sh projeto-2
+          after_hash="$(sha256sum docker-compose.dev.yml docker-compose.prd.yml docker/nginx/nginx.dev.conf docker/nginx/nginx.prd.conf | sha256sum)"
+          test "${before_hash}" = "${after_hash}"
+
+          if grep -F '__SELECT_BACKEND__' docker-compose.dev.yml docker-compose.prd.yml; then
+            echo 'O marcador __SELECT_BACKEND__ permaneceu após a seleção.' >&2
+            exit 1
+          fi
+
+          bash scripts/create-production-envs.sh
+          docker compose -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.prd.yml config --quiet
+
+      - name: Executar testes automatizados Playwright dos scripts
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          npm ci
+          npm run test:scripts

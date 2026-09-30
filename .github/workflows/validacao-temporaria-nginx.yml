@@ -143,8 +143,8 @@ jobs:
           HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
           PY
 
-          mkdir -p /tmp/frontend-upstream
-          printf '%s\n' '<!doctype html><html><body>frontend-upstream-ok</body></html>' > /tmp/frontend-upstream/index.html
+          mkdir -p /tmp/frontend-upstream/ebisu
+          printf '%s\n' '<!doctype html><html><body>frontend-upstream-ok</body></html>' > /tmp/frontend-upstream/ebisu/index.html
 
           docker network create validacao-nginx
           docker run -d \

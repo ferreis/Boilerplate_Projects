@@ -104,23 +104,68 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "${VALIDATION_DIR}"
+
+          cat > /tmp/backend-validacao.py <<'PY'
+          import json
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  body = json.dumps({"path": self.path}).encode()
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+
+              def log_message(self, format, *args):
+                  return
+
+          HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+          PY
+
+          python3 /tmp/backend-validacao.py >/tmp/backend-validacao.log 2>&1 &
+          backend_pid=$!
+
+          cd "${GITHUB_WORKSPACE}/frontend"
+          VITE_BASE_PATH=/ebisu/ npm run dev -- --host 0.0.0.0 >/tmp/frontend-validacao.log 2>&1 &
+          frontend_pid=$!
 
           cleanup() {
-            NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml down -v || true
+            docker rm -f nginx-ebisu-validacao >/dev/null 2>&1 || true
+            kill "${frontend_pid}" "${backend_pid}" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
-          NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml up -d --build
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/ebisu/ >/tmp/frontend-direto.html && curl -fsS http://127.0.0.1:8000/health >/tmp/backend-direto.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          cd "${VALIDATION_DIR}"
+          docker build --target development -t boilerplate-nginx-validacao -f docker/nginx/Dockerfile .
+          docker run -d \
+            --name nginx-ebisu-validacao \
+            --add-host backend-ebisu-dev:host-gateway \
+            --add-host frontend-ebisu-dev:host-gateway \
+            -p 18080:80 \
+            -p 18443:443 \
+            -e NGINX_ENV=development \
+            -e NGINX_HTTPS_PORT=18443 \
+            -v "${PWD}/docker/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro" \
+            -v "${PWD}/docker/nginx/ssl:/etc/nginx/ssl" \
+            boilerplate-nginx-validacao
 
           for attempt in $(seq 1 30); do
             if curl -kfsS https://127.0.0.1:18443/ebisu/api/health >/tmp/health.json; then
               break
             fi
-            sleep 2
+            sleep 1
           done
 
-          grep -Fq '"status":"ok"' /tmp/health.json
+          grep -Fq '"path": "/health"' /tmp/health.json
           curl -kfsS https://127.0.0.1:18443/ebisu/ >/tmp/frontend.html
           grep -Fqi '<html' /tmp/frontend.html
 
@@ -130,4 +175,4 @@ jobs:
           api_location="$(curl -ksSI https://127.0.0.1:18443/ebisu/api | tr -d '\r' | awk 'tolower($1) == "location:" {print $2}')"
           test "${api_location}" = '/ebisu/api/'
 
-          NGINX_HTTP_PORT=18080 NGINX_HTTPS_PORT=18443 docker compose -f docker-compose.dev.yml exec -T nginx-ebisu-dev nginx -t -c /tmp/nginx.conf
+          docker exec nginx-ebisu-validacao nginx -t -c /tmp/nginx.conf

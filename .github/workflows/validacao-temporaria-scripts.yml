@@ -1,4 +1,5 @@
 # Descrição: valida temporariamente os scripts de seleção/renomeação, os testes Playwright e a sintaxe dos arquivos Docker Compose.
+# Execução temporária após a correção do marcador de volume do backend.
 name: Validação temporária de scripts
 run-name: Validação temporária dos scripts de projeto
 

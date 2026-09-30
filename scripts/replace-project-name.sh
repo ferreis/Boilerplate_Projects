@@ -99,7 +99,8 @@ rewrite_nginx() {
     "${configuration_file}" > "${temporary_file}"
 
   if [[ -n "${current_project_name}" && "${current_project_name}" != "${project_name}" ]]; then
-    sed -E "s,/${current_project_name}(/|[[:space:]]|;),/${project_name}\\1,g" \
+    sed -E \
+      "/^[[:space:]]*(location|return|try_files)[[:space:]]/ s,/${current_project_name}(/|[[:space:]]|;),/${project_name}\\1,g" \
       "${temporary_file}" > "${configuration_file}"
     rm -f "${temporary_file}"
   else

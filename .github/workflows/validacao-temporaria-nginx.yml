@@ -176,7 +176,7 @@ jobs:
             if curl -kfsS https://127.0.0.1:18443/ebisu/api/health >/tmp/health.json; then
               break
             fi
-            if ! docker ps --format '{{.Names}}' | grep -Fxq nginx-ebisu-validacao; then
+            if [ "$(docker inspect -f '{{.State.Running}}' nginx-ebisu-validacao 2>/dev/null || true)" != 'true' ]; then
               docker logs nginx-ebisu-validacao >&2 || true
               exit 1
             fi

@@ -105,6 +105,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          cd "${GITHUB_WORKSPACE}/frontend"
+          VITE_BASE_PATH=/ebisu/ npm run dev -- --host 127.0.0.1 >/tmp/frontend-vite.log 2>&1 &
+          vite_pid=$!
+
+          cleanup() {
+            docker rm -f nginx-ebisu-validacao frontend-ebisu-dev backend-ebisu-dev >/dev/null 2>&1 || true
+            docker network rm validacao-nginx >/dev/null 2>&1 || true
+            kill "${vite_pid}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/ebisu/ >/tmp/frontend-vite.html; then
+              break
+            fi
+            sleep 1
+          done
+          grep -Fqi '<html' /tmp/frontend-vite.html
+
           cat > /tmp/backend-validacao.py <<'PY'
           import json
           from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -124,32 +143,27 @@ jobs:
           HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
           PY
 
-          python3 /tmp/backend-validacao.py >/tmp/backend-validacao.log 2>&1 &
-          backend_pid=$!
+          mkdir -p /tmp/frontend-upstream
+          printf '%s\n' '<!doctype html><html><body>frontend-upstream-ok</body></html>' > /tmp/frontend-upstream/index.html
 
-          cd "${GITHUB_WORKSPACE}/frontend"
-          VITE_BASE_PATH=/ebisu/ npm run dev -- --host 0.0.0.0 >/tmp/frontend-validacao.log 2>&1 &
-          frontend_pid=$!
+          docker network create validacao-nginx
+          docker run -d \
+            --name backend-ebisu-dev \
+            --network validacao-nginx \
+            -v /tmp/backend-validacao.py:/app/server.py:ro \
+            python:3.11-alpine python /app/server.py
 
-          cleanup() {
-            docker rm -f nginx-ebisu-validacao >/dev/null 2>&1 || true
-            kill "${frontend_pid}" "${backend_pid}" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:5173/ebisu/ >/tmp/frontend-direto.html && curl -fsS http://127.0.0.1:8000/health >/tmp/backend-direto.json; then
-              break
-            fi
-            sleep 1
-          done
+          docker run -d \
+            --name frontend-ebisu-dev \
+            --network validacao-nginx \
+            -v /tmp/frontend-upstream:/site:ro \
+            python:3.11-alpine python -m http.server 5173 --directory /site
 
           cd "${VALIDATION_DIR}"
           docker build --target development -t boilerplate-nginx-validacao -f docker/nginx/Dockerfile .
           docker run -d \
             --name nginx-ebisu-validacao \
-            --add-host backend-ebisu-dev:host-gateway \
-            --add-host frontend-ebisu-dev:host-gateway \
+            --network validacao-nginx \
             -p 18080:80 \
             -p 18443:443 \
             -e NGINX_ENV=development \
@@ -162,12 +176,16 @@ jobs:
             if curl -kfsS https://127.0.0.1:18443/ebisu/api/health >/tmp/health.json; then
               break
             fi
+            if ! docker ps --format '{{.Names}}' | grep -Fxq nginx-ebisu-validacao; then
+              docker logs nginx-ebisu-validacao >&2 || true
+              exit 1
+            fi
             sleep 1
           done
 
           grep -Fq '"path": "/health"' /tmp/health.json
-          curl -kfsS https://127.0.0.1:18443/ebisu/ >/tmp/frontend.html
-          grep -Fqi '<html' /tmp/frontend.html
+          curl -kfsS https://127.0.0.1:18443/ebisu/ >/tmp/frontend-proxy.html
+          grep -Fq 'frontend-upstream-ok' /tmp/frontend-proxy.html
 
           http_location="$(curl -sSI http://127.0.0.1:18080/ebisu/api | tr -d '\r' | awk 'tolower($1) == "location:" {print $2}')"
           test "${http_location}" = 'https://127.0.0.1:18443/ebisu/api'

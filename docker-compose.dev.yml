@@ -52,7 +52,7 @@ services:
     environment:
       DEPLOY_ENV: development
       BASE_URL: /{nome_projeto}/api
-      BACKEND_PORT: "8000"
+      BACKEND_PORT: "8000" # Symfony: substituído por 9000 no script de seleção
     expose:
       - "8000"
     depends_on:

@@ -111,6 +111,18 @@ remove_backend_placeholder() {
 remove_backend_placeholder "${PROJECT_DIRECTORY}/docker-compose.dev.yml"
 remove_backend_placeholder "${PROJECT_DIRECTORY}/docker-compose.prd.yml"
 
+# Symfony utiliza FastCGI (PHP-FPM); Python e Drogon continuam em HTTP.
+if [ "${BACKEND_TYPE}" = "symfony" ]; then
+    cp "${PROJECT_DIRECTORY}/docker/nginx/nginx.symfony.dev.conf" "${PROJECT_DIRECTORY}/docker/nginx/nginx.dev.conf"
+    cp "${PROJECT_DIRECTORY}/docker/nginx/nginx.symfony.prd.conf" "${PROJECT_DIRECTORY}/docker/nginx/nginx.prd.conf"
+    sed -i \
+        -e 's/BACKEND_PORT: "8000"/BACKEND_PORT: "9000"/g' \
+        -e 's/- "8000"/- "9000"/g' \
+        "${PROJECT_DIRECTORY}/docker-compose.dev.yml" \
+        "${PROJECT_DIRECTORY}/docker-compose.prd.yml"
+fi
+rm -f "${PROJECT_DIRECTORY}/docker/nginx/nginx.symfony.dev.conf" "${PROJECT_DIRECTORY}/docker/nginx/nginx.symfony.prd.conf"
+
 if [ -f "${PROJECT_DIRECTORY}/.env" ]; then
     CLEAN_ENV_FILE="${TEMP_DIRECTORY}/root.env"
     awk '

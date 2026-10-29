@@ -17,4 +17,4 @@ if [ ! -f /app/vendor/autoload_runtime.php ]; then
     fi
 fi
 
-exec frankenphp run --config /etc/frankenphp/Caddyfile
+exec php-fpm -F

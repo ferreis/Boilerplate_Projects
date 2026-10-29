@@ -13,7 +13,7 @@
 
 ## Backend gerado
 
-- O serviço Docker deve continuar se chamando `backend` e atender HTTP internamente na porta `8000`.
+- O serviço Docker deve continuar se chamando `backend`: Python/Drogon atendem HTTP na porta `8000`; Symfony usa FastCGI (PHP-FPM) na porta `9000` com configuração Nginx selecionada pelo script.
 - Não duplique os arquivos Docker Compose para cada linguagem.
 - Não adicione `command` de runtime ao Compose; use `docker/backend/entrypoint.sh`.
 - Não publique a porta `8000` diretamente no host em produção.

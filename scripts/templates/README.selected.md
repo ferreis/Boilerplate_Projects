@@ -17,7 +17,7 @@ Nginx :80 / :443
     +--------------------------+
     |                          |
     v                          v
-Vue / Vite :5173         backend :8000
+Vue / Vite :5173         backend :8000 (HTTP) / :9000 (FastCGI)
                                 |
                                 v
                          PostgreSQL :5432
@@ -34,7 +34,7 @@ Nginx :80 / :443
    +---------------------------+
    |                           |
    v                           v
-Frontend estático         backend :8000
+Frontend estático         backend :8000 (HTTP) / :9000 (FastCGI)
                                 |
                                 v
                          PostgreSQL :5432
@@ -69,9 +69,8 @@ A documentação específica da API fica em `backend/README.md` quando disponív
 
 O serviço Docker se chama `backend` e deve:
 
-- executar uma API HTTP;
-- escutar em `0.0.0.0:8000`;
-- não publicar a porta `8000` diretamente para o host;
+- disponibilizar a API pelo Nginx via HTTP na porta `8000` (Python, Drogon ou Hyper) ou FastCGI na porta `9000` (Symfony);
+- não publicar a porta interna do backend diretamente para o host;
 - utilizar o hostname Docker `database` para PostgreSQL;
 - disponibilizar `GET /health` retornando `{"status":"ok"}`;
 - manter o comando de inicialização em `docker/backend/entrypoint.sh`.
@@ -173,7 +172,7 @@ docker compose -f docker-compose.prd.yml up -d --build
 
 ## Nginx
 
-O Nginx continua sendo independente da tecnologia usada pelo backend. Ele encaminha a API para o serviço backend na porta interna `8000`.
+O Nginx mantém o mesmo endereço público para todas as tecnologias. Para Python, Drogon e Hyper, encaminha HTTP para `backend:8000`; para Symfony, encaminha FastCGI para `backend:9000`.
 
 O prefixo público permanece:
 
@@ -181,11 +180,13 @@ O prefixo público permanece:
 /{nome_projeto}/api/
 ```
 
-Exemplo:
+Exemplo com backend HTTP:
 
 ```text
 /meu-projeto/api/health -> backend:8000/health
 ```
+
+Com Symfony, a mesma URL é processada pelo front controller `public/index.php` usando PHP-FPM.
 
 ## Segurança da infraestrutura
 

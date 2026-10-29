@@ -2,11 +2,12 @@
 
 Boilerplate para aplicações web com frontend Vue/Vite, Nginx como único ponto de entrada externo, PostgreSQL e backend selecionável durante a criação do projeto.
 
-O template oferece três implementações iniciais:
+O template oferece quatro implementações iniciais:
 
 - **Python + FastAPI**;
 - **C++ + Drogon**;
-- **PHP + Symfony**.
+- **PHP + Symfony**;
+- **Rust + Hyper**.
 
 A seleção é uma etapa de inicialização do projeto. Depois de escolher uma implementação, as outras são removidas e o projeto passa a possuir apenas um backend.
 
@@ -28,6 +29,12 @@ ou:
 
 ```bash
 ./scripts/select-backend.sh symfony
+```
+
+ou:
+
+```bash
+./scripts/select-backend.sh hyper
 ```
 
 ### O que o script faz
@@ -59,17 +66,20 @@ backend/
 ├── README.md
 ├── python/
 ├── drogon/
-└── symfony/
+├── symfony/
+└── hyper/
 
 docker/backend/
 ├── python/
 ├── drogon/
-└── symfony/
+├── symfony/
+└── hyper/
 
 env/
 ├── backend.python.dev.env
 ├── backend.drogon.dev.env
-└── backend.symfony.dev.env
+├── backend.symfony.dev.env
+└── backend.hyper.dev.env
 ```
 
 ## Estrutura depois da seleção
@@ -108,13 +118,13 @@ Antes da seleção, todas as opções devem respeitar `backend/CONTRACT.md`.
 O backend escolhido deve:
 
 - executar uma API HTTP;
-- escutar em `0.0.0.0:8000` (Python/Drogon) ou receber FastCGI em `9000` (Symfony);
+- escutar em `0.0.0.0:8000` (Python/Drogon/Hyper) ou receber FastCGI em `9000` (Symfony);
 - permanecer sem porta publicada diretamente para o host;
 - utilizar o hostname Docker `database` para PostgreSQL;
 - disponibilizar `GET /health` retornando `{"status":"ok"}`;
 - manter comandos de runtime no respectivo `entrypoint.sh`.
 
-Após selecionar o backend, o Nginx mantém HTTP na porta 8000 para Python/Drogon e passa a FastCGI na porta 9000 para Symfony. Antes da seleção, o contrato HTTP padrão é:
+Após selecionar o backend, o Nginx encaminha requisições HTTP para Python, Drogon ou Hyper na porta `8000`, ou utiliza FastCGI para Symfony na porta `9000`. Para os backends HTTP, o destino interno é:
 
 ```text
 backend:8000
@@ -150,6 +160,20 @@ Inclui:
 - API HTTP interna em `8000`;
 - `GET /health`.
 
+### Rust / Hyper
+
+Base HTTP em Rust com Hyper 1 e Tokio.
+
+Inclui:
+
+- servidor HTTP assíncrono na porta interna `8000`;
+- endpoint `GET /health` com resposta `{"status":"ok"}`;
+- compilação em desenvolvimento e build multi-stage de produção;
+- imagem de produção sem compilador Rust;
+- integração com a configuração HTTP existente do Nginx.
+
+Hyper é uma biblioteca HTTP de baixo nível. Esta base ainda não implementa autenticação, persistência ou roteamento avançado. Consulte [a documentação específica](backend/hyper/README.md).
+
 ### PHP / Symfony
 
 Base de API usando Symfony 7.4 LTS, PHP 8.4 e PHP-FPM.
@@ -168,7 +192,13 @@ As implementações ainda não possuem paridade completa de funcionalidades. A a
 
 ### 1. Escolha o backend
 
-Execute `select-backend.sh` antes de começar a desenvolver.
+Execute `select-backend.sh` antes de começar a desenvolver. Exemplo para Rust + Hyper:
+
+```bash
+./scripts/select-backend.sh hyper
+```
+
+A seleção remove os outros backends desta cópia, portanto execute-a somente após decidir a tecnologia.
 
 ### 2. Configure o nome do projeto
 
@@ -306,7 +336,7 @@ Somente o Nginx expõe portas externas em produção.
 Em produção:
 
 - apenas Nginx publica `80/443` por padrão;
-- backend não publica `8000`;
+- backend não publica `8000` nem `9000` diretamente no host;
 - PostgreSQL não publica `5432`;
 - `backendNet` e `databaseNet` são redes internas;
 - Nginx não acessa diretamente PostgreSQL;

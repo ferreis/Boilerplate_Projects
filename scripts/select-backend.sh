@@ -6,7 +6,7 @@ PROJECT_DIRECTORY="$(CDPATH= cd -- "${SCRIPT_DIRECTORY}/.." && pwd)"
 TEMPLATE_DIRECTORY="${SCRIPT_DIRECTORY}/templates"
 
 print_usage() {
-    echo "Uso: $0 <python|drogon|symfony>" >&2
+    echo "Uso: $0 <python|drogon|symfony|hyper>" >&2
 }
 
 if [ "$#" -ne 1 ]; then
@@ -24,6 +24,9 @@ case "${BACKEND_TYPE}" in
         ;;
     symfony)
         BACKEND_DISPLAY="PHP + Symfony"
+        ;;
+    hyper)
+        BACKEND_DISPLAY="Rust + Hyper"
         ;;
     *)
         echo "Backend inválido: ${BACKEND_TYPE}" >&2
@@ -128,7 +131,7 @@ if [ -f "${PROJECT_DIRECTORY}/.env" ]; then
     awk '
         /^BACKEND_TYPE=/ { next }
         /^# Backend utilizado pelos arquivos Docker Compose\.$/ { next }
-        /^# Valores aceitos: python, drogon, symfony\.$/ { next }
+        /^# Valores aceitos: python, drogon, symfony, hyper\.$/ { next }
         { print }
     ' "${PROJECT_DIRECTORY}/.env" > "${CLEAN_ENV_FILE}"
 

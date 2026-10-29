@@ -2,7 +2,7 @@
 
 ## Seleção inicial do backend
 
-- O boilerplate oferece `python`, `drogon` e `symfony` somente antes da inicialização.
+- O boilerplate oferece `python`, `drogon`, `symfony` e `hyper` somente antes da inicialização.
 - A escolha deve ser feita com `scripts/select-backend.sh <tipo>`.
 - A seleção é destrutiva para a cópia atual: os outros backends e suas referências são removidos.
 - Depois da seleção, o código escolhido fica diretamente em `backend/`.
@@ -13,7 +13,7 @@
 
 ## Backend gerado
 
-- O serviço Docker deve continuar se chamando `backend`: Python/Drogon atendem HTTP na porta `8000`; Symfony usa FastCGI (PHP-FPM) na porta `9000` com configuração Nginx selecionada pelo script.
+- O serviço Docker deve continuar se chamando `backend`: Python/Drogon/Hyper atendem HTTP na porta `8000`; Symfony usa FastCGI (PHP-FPM) na porta `9000` com configuração Nginx selecionada pelo script.
 - Não duplique os arquivos Docker Compose para cada linguagem.
 - Não adicione `command` de runtime ao Compose; use `docker/backend/entrypoint.sh`.
 - Não publique a porta `8000` diretamente no host em produção.

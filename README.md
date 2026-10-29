@@ -2,11 +2,12 @@
 
 Boilerplate para aplicações web com frontend Vue/Vite, Nginx como único ponto de entrada externo, PostgreSQL e backend selecionável durante a criação do projeto.
 
-O template oferece três implementações iniciais:
+O template oferece quatro implementações iniciais:
 
 - **Python + FastAPI**;
 - **C++ + Drogon**;
-- **PHP + Symfony**.
+- **PHP + Symfony**;
+- **Rust + Hyper**.
 
 A seleção é uma etapa de inicialização do projeto. Depois de escolher uma implementação, as outras são removidas e o projeto passa a possuir apenas um backend.
 
@@ -28,6 +29,12 @@ ou:
 
 ```bash
 ./scripts/select-backend.sh symfony
+```
+
+ou:
+
+```bash
+./scripts/select-backend.sh hyper
 ```
 
 ### O que o script faz
@@ -59,7 +66,8 @@ backend/
 ├── README.md
 ├── python/
 ├── drogon/
-└── symfony/
+├── symfony/
+└── hyper/
 
 docker/backend/
 ├── python/
@@ -108,7 +116,7 @@ Antes da seleção, todas as opções devem respeitar `backend/CONTRACT.md`.
 O backend escolhido deve:
 
 - executar uma API HTTP;
-- escutar em `0.0.0.0:8000` (Python/Drogon) ou receber FastCGI em `9000` (Symfony);
+- escutar em `0.0.0.0:8000` (Python/Drogon/Hyper) ou receber FastCGI em `9000` (Symfony);
 - permanecer sem porta publicada diretamente para o host;
 - utilizar o hostname Docker `database` para PostgreSQL;
 - disponibilizar `GET /health` retornando `{"status":"ok"}`;
@@ -149,6 +157,10 @@ Inclui:
 - build multi-stage para produção;
 - API HTTP interna em `8000`;
 - `GET /health`.
+
+### Rust / Hyper
+
+Backend Rust com Hyper 1 e Tokio. Inclui servidor HTTP na porta `8000`, build de desenvolvimento e produção multi-stage e `GET /health`.
 
 ### PHP / Symfony
 

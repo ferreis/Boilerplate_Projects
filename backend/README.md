@@ -6,7 +6,8 @@ As opções disponíveis são:
 
 - `python` — FastAPI;
 - `drogon` — C++/Drogon;
-- `symfony` — PHP/Symfony.
+- `symfony` — PHP/Symfony;
+- `hyper` — Rust/Hyper.
 
 Escolha uma implementação executando na raiz:
 
@@ -22,6 +23,10 @@ Escolha uma implementação executando na raiz:
 ./scripts/select-backend.sh symfony
 ```
 
+```bash
+./scripts/select-backend.sh hyper
+```
+
 O script não apenas marca uma opção. Ele remove as implementações descartadas e promove a escolhida para a própria pasta `backend/`.
 
 Depois da execução, esta estrutura:
@@ -32,7 +37,8 @@ backend/
 ├── README.md
 ├── python/
 ├── drogon/
-└── symfony/
+├── symfony/
+└── hyper/
 ```
 
 é substituída pelo conteúdo do backend escolhido:

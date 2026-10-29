@@ -5,7 +5,7 @@ Todos os backends deste boilerplate devem respeitar este contrato para que possa
 ## Contrato operacional
 
 - o serviço Docker continua se chamando `backend`;
-- Python/Drogon devem escutar HTTP em `0.0.0.0`; Symfony executa PHP-FPM com FastCGI;
+- Python/Drogon/Hyper devem escutar HTTP em `0.0.0.0`; Symfony executa PHP-FPM com FastCGI;
 - a porta interna HTTP padrão é `8000`; Symfony usa FastCGI na porta `9000`;
 - nenhum backend publica portas diretamente para o host;
 - o Nginx é o único ponto de entrada externo e seleciona proxy HTTP ou FastCGI conforme o backend;
@@ -34,6 +34,7 @@ O contrato mínimo não significa que todas as implementações já tenham parid
 
 - `python`: inclui autenticação JWT e health check;
 - `drogon`: base de API com health check;
-- `symfony`: base de API com health check.
+- `symfony`: base de API com health check;
+- `hyper`: base Rust com servidor HTTP Hyper e health check.
 
 Ao portar uma feature para outro backend, preserve os contratos HTTP utilizados pelo frontend antes de trocar `BACKEND_TYPE` em uma aplicação que dependa dessa feature.

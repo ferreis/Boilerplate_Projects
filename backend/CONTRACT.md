@@ -5,10 +5,10 @@ Todos os backends deste boilerplate devem respeitar este contrato para que possa
 ## Contrato operacional
 
 - o serviço Docker continua se chamando `backend`;
-- o processo HTTP deve escutar em `0.0.0.0`;
-- a porta interna padrão é `8000` e pode ser recebida por `BACKEND_PORT`;
+- Python/Drogon devem escutar HTTP em `0.0.0.0`; Symfony executa PHP-FPM com FastCGI;
+- a porta interna HTTP padrão é `8000`; Symfony usa FastCGI na porta `9000`;
 - nenhum backend publica portas diretamente para o host;
-- o Nginx é o único ponto de entrada externo;
+- o Nginx é o único ponto de entrada externo e seleciona proxy HTTP ou FastCGI conforme o backend;
 - o PostgreSQL é acessível somente pela rede interna `databaseNet`;
 - comandos de inicialização ficam em `docker/backend/<tipo>/entrypoint.sh`, não em `command` no Compose.
 

@@ -1,8 +1,8 @@
 # Backend Symfony
 
-Implementação PHP do backend utilizando Symfony 7.4 LTS, PHP 8.4 e FrankenPHP.
+Implementação PHP do backend utilizando Symfony 7.4 LTS, PHP 8.4 e PHP-FPM.
 
-Esta base é exclusivamente uma API HTTP, escuta internamente em `8000` e implementa `GET /health`.
+Esta base é exclusivamente uma API HTTP, processa requisições FastCGI internamente na porta `9000` e implementa `GET /health`.
 
 ## Desenvolvimento
 
@@ -10,11 +10,11 @@ Esta base é exclusivamente uma API HTTP, escuta internamente em `8000` e implem
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-O código é montado em `/app`; alterações PHP são refletidas sem recompilar a imagem. Se `vendor/` não existir, o `entrypoint.sh` executa o Composer antes de iniciar o FrankenPHP.
+O código é montado em `/app`; alterações PHP são refletidas sem recompilar a imagem. Se `vendor/` não existir, o `entrypoint.sh` executa o Composer antes de iniciar o PHP-FPM.
 
 ## Produção
 
-O estágio `production` instala dependências sem pacotes de desenvolvimento, usa `php.ini-production` e serve Symfony com FrankenPHP atrás do Nginx principal.
+O estágio `production` instala dependências sem pacotes de desenvolvimento, usa `php.ini-production` e executa Symfony via PHP-FPM, com o Nginx principal encaminhando FastCGI.
 
 ```bash
 docker compose -f docker-compose.prd.yml up -d --build

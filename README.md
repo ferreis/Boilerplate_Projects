@@ -108,13 +108,13 @@ Antes da seleção, todas as opções devem respeitar `backend/CONTRACT.md`.
 O backend escolhido deve:
 
 - executar uma API HTTP;
-- escutar em `0.0.0.0:8000`;
+- escutar em `0.0.0.0:8000` (Python/Drogon) ou receber FastCGI em `9000` (Symfony);
 - permanecer sem porta publicada diretamente para o host;
 - utilizar o hostname Docker `database` para PostgreSQL;
 - disponibilizar `GET /health` retornando `{"status":"ok"}`;
 - manter comandos de runtime no respectivo `entrypoint.sh`.
 
-Por isso o Nginx não precisa saber qual tecnologia implementa a API. Ele sempre encaminha para:
+Após selecionar o backend, o Nginx mantém HTTP na porta 8000 para Python/Drogon e passa a FastCGI na porta 9000 para Symfony. Antes da seleção, o contrato HTTP padrão é:
 
 ```text
 backend:8000
@@ -152,12 +152,12 @@ Inclui:
 
 ### PHP / Symfony
 
-Base de API usando Symfony 7.4 LTS, PHP 8.4 e FrankenPHP.
+Base de API usando Symfony 7.4 LTS, PHP 8.4 e PHP-FPM.
 
 Inclui:
 
 - estrutura mínima Symfony;
-- FrankenPHP como servidor interno;
+- PHP-FPM como processo FastCGI interno na porta `9000`;
 - `pdo_pgsql`, `intl`, `mbstring` e `opcache`;
 - configuração distinta de desenvolvimento e produção;
 - `GET /health`.
@@ -276,7 +276,7 @@ Nginx :80 / :443
     +--------------------------+
     |                          |
     v                          v
-Vue / Vite :5173         backend :8000
+Vue / Vite :5173         backend :8000 (HTTP) / :9000 (FastCGI)
                                 |
                                 v
                          PostgreSQL :5432
@@ -293,7 +293,7 @@ Nginx :80 / :443
    +---------------------------+
    |                           |
    v                           v
-Frontend estático         backend :8000
+Frontend estático         backend :8000 (HTTP) / :9000 (FastCGI)
                                 |
                                 v
                          PostgreSQL :5432
